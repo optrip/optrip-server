@@ -27,7 +27,7 @@
 
 ```bash
 # 레포지토리 클론
-git clone https://github.com/본인계정/optrip-server.git
+git clone https://github.com/optrip/optrip-server.git
 cd optrip-server
 
 # 실행
