@@ -20,7 +20,7 @@ public class HelloController {
         // ResponseEntity → HTTP 상태코드(200, 404 등) + 데이터를 함께 반환
         // Map.of() → 간단한 JSON 만들기. {"message": "..."}
         return ResponseEntity.ok(
-                Map.of("message", "optrip server is running!")
+                Map.of("message", "optrip server is running!!!")
         );
     }
 }
