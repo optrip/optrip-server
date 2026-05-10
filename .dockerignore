@@ -1,0 +1,13 @@
+.git
+.gitignore
+.gitattributes
+.gradle
+.idea
+.vscode
+build
+out
+*.iml
+README.md
+HELP.md
+Dockerfile
+.dockerignore
