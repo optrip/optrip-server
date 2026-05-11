@@ -1,10 +1,14 @@
 package com.optrip.server.controller;
 
+import com.optrip.server.client.GeminiClient;
+import com.optrip.server.dto.GeminiTestResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 // @RestController → JSON을 반환하는 컨트롤러. @Controller + @ResponseBody 합친 것
@@ -12,6 +16,11 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api")
 public class HelloController {
+    private final GeminiClient geminiClient;
+
+    public HelloController(GeminiClient geminiClient) {
+        this.geminiClient = geminiClient;
+    }
 
     // @GetMapping → GET 방식 HTTP 요청을 받음
     // 전체 경로: GET /api/hello
@@ -22,5 +31,20 @@ public class HelloController {
         return ResponseEntity.ok(
                 Map.of("message", "optrip server is running!!!")
         );
+    }
+
+    // Gemini 호출 테스트용: GET /api/gemini-test?prompt=...
+    @GetMapping("/gemini-test")
+    public ResponseEntity<Map<String, String>> geminiTest(@RequestParam String prompt) {
+        Map<String, Object> responseSchema = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "response", Map.of("type", "STRING")
+                ),
+                "required", List.of("response")
+        );
+
+        GeminiTestResponse result = geminiClient.generateStructured(prompt, responseSchema, GeminiTestResponse.class);
+        return ResponseEntity.ok(Map.of("response", result.response()));
     }
 }
