@@ -1,0 +1,13 @@
+${AnsiColor.SILVER}
+       //    ____        _        _               //
+      //    / __ \      | |      (_)             //
+     //    | |  | |_ __ | |_ _ __ _ _ __        //
+    //     | |  | | '_ \| __| '__| | '_ \      //
+   //      | |  | | |_) | |_| |  | | |_) |    //
+  //       | |__| | .__/ \__|_|  |_| .__/    //
+ //         \ __ /| |              | |      //
+//                |_|              |_|     //
+
+${AnsiColor.DEFAULT}
+:: Optrip Server ::  ${AnsiColor.BRIGHT_BLACK}(v${application.version:0.0.1}) Spring Boot ${spring-boot.version}${AnsiColor.DEFAULT}
+
