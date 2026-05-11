@@ -1,4 +1,4 @@
-package com.optrip.server.client;
+package com.optrip.server.client.gemini;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;

@@ -1,6 +1,6 @@
 package com.optrip.server.controller;
 
-import com.optrip.server.client.GeminiClient;
+import com.optrip.server.client.gemini.GeminiClient;
 import com.optrip.server.dto.GeminiTestResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

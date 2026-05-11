@@ -1,13 +1,13 @@
-package com.optrip.server.client;
+package com.optrip.server.client.gemini;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.optrip.server.client.GeminiPayloads.Candidate;
-import com.optrip.server.client.GeminiPayloads.Content;
-import com.optrip.server.client.GeminiPayloads.GenerateContentRequest;
-import com.optrip.server.client.GeminiPayloads.GenerateContentResponse;
-import com.optrip.server.client.GeminiPayloads.GenerationConfig;
-import com.optrip.server.client.GeminiPayloads.Part;
+import com.optrip.server.client.gemini.GeminiPayloads.Candidate;
+import com.optrip.server.client.gemini.GeminiPayloads.Content;
+import com.optrip.server.client.gemini.GeminiPayloads.GenerateContentRequest;
+import com.optrip.server.client.gemini.GeminiPayloads.GenerateContentResponse;
+import com.optrip.server.client.gemini.GeminiPayloads.GenerationConfig;
+import com.optrip.server.client.gemini.GeminiPayloads.Part;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
