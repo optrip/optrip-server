@@ -30,11 +30,36 @@
 git clone https://github.com/optrip/optrip-server.git
 cd optrip-server
 
-# 실행
-./gradlew bootRun
+# Gemini API 키 설정 (아래 "Gemini API 키 설정" 섹션 참고)
+
+# 실행 (local 프로파일 활성화)
+SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
 ```
 
 서버가 정상 실행되면 `http://localhost:8080` 에서 접근 가능합니다.
+
+### Gemini API 키 설정
+
+API 키는 환경변수로 주입됩니다. 키 자체는 절대 커밋하지 마세요.
+
+#### 로컬 개발
+
+`src/main/resources/application-local.yml` 파일을 만들고 본인 키를 넣습니다. 이 파일은 `.gitignore`에 등록되어 있어 커밋되지 않습니다.
+
+```yaml
+gemini:
+  api-key: YOUR_GEMINI_API_KEY
+```
+
+실행 시 `local` 프로파일을 활성화하면 위 값이 적용됩니다.
+
+```bash
+SPRING_PROFILES_ACTIVE=local ./gradlew bootRun
+```
+
+IntelliJ에서 실행할 경우, Run Configuration의 **Environment variables** 에 `SPRING_PROFILES_ACTIVE=local` 을 추가하세요.
+
+키는 [Google AI Studio](https://aistudio.google.com/apikey) 에서 발급받을 수 있습니다.
 
 ### 동작 확인
 
