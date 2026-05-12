@@ -19,11 +19,6 @@ public class RecommendController {
         this.recommendService = recommendService;
     }
 
-    @GetMapping("/hello")
-    public ResponseEntity<Map<String, String>> hello() {
-        return ResponseEntity.ok(Map.of("message", "optrip server is running!!!"));
-    }
-
     @PostMapping("/recommend")
     public ResponseEntity<RecommendResponse> recommend(@RequestBody RecommendRequest request) {
         // @RequestBody → 프론트가 보낸 JSON을 RecommendRequest 객체로 자동 변환

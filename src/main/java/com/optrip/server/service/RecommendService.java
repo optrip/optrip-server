@@ -104,6 +104,31 @@ public class RecommendService {
 
     public RecommendResponse recommend(RecommendRequest request) {
 
+        String durationInfo;
+        if (request.getStartDate() != null && request.getEndDate() != null) {
+            // 날짜 차이 계산
+            java.time.LocalDate start = java.time.LocalDate.parse(request.getStartDate());
+            java.time.LocalDate end = java.time.LocalDate.parse(request.getEndDate());
+            long days = java.time.temporal.ChronoUnit.DAYS.between(start, end);
+
+            // 날짜 차이를 duration 형식으로 변환
+            if (days == 0) {
+                durationInfo = "당일치기";
+            } else if (days == 1) {
+                durationInfo = "1박2일";
+            } else if (days == 2) {
+                durationInfo = "2박3일";
+            } else if (days == 3) {
+                durationInfo = "3박4일";
+            } else if (days == 4) {
+                durationInfo = "4박5일";
+            } else {
+                durationInfo = "5박6일";
+            }
+        } else {
+            durationInfo = request.getDuration();
+        }
+
         Map<String, Object> best = null;
         int bestScore = -1;
 
@@ -122,7 +147,7 @@ public class RecommendService {
             // 2순위: 기간 (30점)
             List<String> suitableDuration =
                     (List<String>) region.get("suitableDuration");
-            if (suitableDuration.contains(request.getDuration())) {
+            if (suitableDuration.contains(durationInfo)) {
                 score += 30;
             }
 
