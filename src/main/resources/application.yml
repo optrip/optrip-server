@@ -4,3 +4,17 @@ spring:
 
 server:
   port: 8080
+  forward-headers-strategy: framework
+
+gemini:
+  api-key: AIzaSyB1SAIkjBdG3I1137JFfFa1iRag48c0G4M
+  base-url: https://generativelanguage.googleapis.com
+  model: gemini-2.5-flash
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
