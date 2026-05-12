@@ -15,7 +15,7 @@ public class HelloController {
 
     // @GetMapping → GET 방식 HTTP 요청을 받음
     // 전체 경로: GET /api/hello
-    @GetMapping("/hello")
+    @GetMapping("/hello/delete")
     public ResponseEntity<Map<String, String>> hello() {
         // ResponseEntity → HTTP 상태코드(200, 404 등) + 데이터를 함께 반환
         // Map.of() → 간단한 JSON 만들기. {"message": "..."}
