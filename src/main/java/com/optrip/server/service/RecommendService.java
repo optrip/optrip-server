@@ -13,91 +13,99 @@ public class RecommendService {
     // 지역 데이터 구조
     private static final List<Map<String, Object>> REGIONS = List.of(
 
+            // 1. 강원도 강릉
             Map.of(
                     "regionName", "강원도 강릉",
-                    "description", "푸른 바다와 커피향이 어우러진 여유",
-                    "reason", "바다를 보며 힐링하기 좋은 최적의 장소예요.",
-                    "tags", List.of("#오션뷰", "#카페투어", "#당일치기_가능"),
+                    "description", "푸른 바다와 커피향이 어우러진 여유로운 도시",
+                    "reason", "바다를 보며 힐링하고 감성 카페에서 여유를 즐길 수 있어요.",
+                    "tags", List.of("#오션뷰", "#카페투어", "#힐링"),
                     "suitableBudget", List.of("10~20만"),
                     "suitableDuration", List.of("당일치기", "1박2일"),
-                    "suitablePurpose", List.of("힐링", "맛집"),
-                    "suitableCompanion", List.of("친구와", "연인과")
+                    "suitablePurpose", List.of("힐링", "카페투어", "자연/풍경", "감성/사진"),
+                    "suitableCompanion", List.of("친구와", "애인과", "혼자")
             ),
 
+            // 2. 전라북도 전주
             Map.of(
                     "regionName", "전라북도 전주",
-                    "description", "한옥마을과 맛집의 도시",
-                    "reason", "저렴하게 즐길 수 있는 맛집 천국이에요.",
-                    "tags", List.of("#한옥마을", "#맛집", "#가성비"),
+                    "description", "한옥마을과 전통 먹거리가 살아있는 도시",
+                    "reason", "전통문화와 맛집을 동시에 즐길 수 있는 가성비 여행지예요.",
+                    "tags", List.of("#한옥마을", "#맛집", "#역사/문화"),
                     "suitableBudget", List.of("10만 이하", "10~20만"),
                     "suitableDuration", List.of("당일치기", "1박2일"),
-                    "suitablePurpose", List.of("맛집", "역사적인"),
-                    "suitableCompanion", List.of("친구와", "가족과", "혼자")
+                    "suitablePurpose", List.of("맛집", "역사/문화", "문화체험", "감성/사진"),
+                    "suitableCompanion", List.of("친구와", "애인과", "혼자", "부모님과")
             ),
 
+            // 3. 제주도
             Map.of(
                     "regionName", "제주도",
-                    "description", "자연과 힐링이 가득한 섬",
-                    "reason", "한국에서 가장 아름다운 자연을 만날 수 있어요.",
-                    "tags", List.of("#자연", "#오션뷰", "#액티비티"),
+                    "description", "자연과 힐링이 가득한 한국의 섬",
+                    "reason", "웅장한 자연 속에서 힐링과 액티비티를 모두 즐길 수 있어요.",
+                    "tags", List.of("#자연/풍경", "#힐링", "#액티비티"),
                     "suitableBudget", List.of("20만 이상"),
                     "suitableDuration", List.of("2박3일", "3박4일", "4박5일"),
-                    "suitablePurpose", List.of("힐링", "액티비티", "자연/풍경", "유명관광지"),
+                    "suitablePurpose", List.of("힐링", "액티비티", "자연/풍경", "감성/사진"),
                     "suitableCompanion", List.of("애인과", "친구와", "부모님과", "아이와")
             ),
 
+            // 4. 경상북도 경주
             Map.of(
                     "regionName", "경상북도 경주",
                     "description", "천년 역사가 살아숨쉬는 고도",
-                    "reason", "역사와 문화를 좋아한다면 경주가 최적이에요.",
-                    "tags", List.of("#역사", "#야경", "#유네스코"),
+                    "reason", "한국 역사와 문화를 가장 깊이 느낄 수 있는 도시예요.",
+                    "tags", List.of("#역사/문화", "#문화체험", "#감성/사진"),
                     "suitableBudget", List.of("10만 이하", "10~20만"),
                     "suitableDuration", List.of("당일치기", "1박2일", "2박3일"),
-                    "suitablePurpose", List.of("역사적인", "유명관광지", "야경", "자연/풍경"),
+                    "suitablePurpose", List.of("역사/문화", "문화체험", "감성/사진", "자연/풍경"),
                     "suitableCompanion", List.of("부모님과", "친구와", "애인과", "혼자")
             ),
 
+            // 5. 전라남도 목포
             Map.of(
                     "regionName", "전라남도 목포",
                     "description", "남도의 맛과 항구 낭만이 가득한 도시",
-                    "reason", "신선한 해산물과 남도 음식을 저렴하게 즐길 수 있어요.",
-                    "tags", List.of("#해산물", "#항구", "#남도맛집"),
+                    "reason", "신선한 해산물과 남도 맛집을 저렴하게 즐길 수 있어요.",
+                    "tags", List.of("#맛집", "#역사/문화", "#감성/사진"),
                     "suitableBudget", List.of("10만 이하", "10~20만"),
                     "suitableDuration", List.of("당일치기", "1박2일"),
-                    "suitablePurpose", List.of("맛집", "역사적인", "자연/풍경"),
+                    "suitablePurpose", List.of("맛집", "역사/문화", "자연/풍경", "문화체험"),
                     "suitableCompanion", List.of("부모님과", "친구와", "혼자", "아이와")
             ),
 
+            // 6. 강원도 속초
             Map.of(
                     "regionName", "강원도 속초",
-                    "description", "설악산과 동해바다가 공존하는 도시",
-                    "reason", "바다와 산을 동시에 즐길 수 있는 액티비티 천국이에요.",
-                    "tags", List.of("#설악산", "#오션뷰", "#액티비티"),
+                    "description", "설악산과 동해바다가 공존하는 액티비티 도시",
+                    "reason", "바다와 산을 동시에 즐길 수 있는 자연 액티비티 천국이에요.",
+                    "tags", List.of("#액티비티", "#자연/풍경", "#오션뷰"),
                     "suitableBudget", List.of("10~20만", "20만 이상"),
                     "suitableDuration", List.of("1박2일", "2박3일"),
-                    "suitablePurpose", List.of("액티비티", "자연/풍경", "힐링", "맛집"),
+                    "suitablePurpose", List.of("액티비티", "자연/풍경", "힐링", "감성/사진"),
                     "suitableCompanion", List.of("친구와", "애인과", "부모님과", "혼자")
             ),
 
+            // 7. 충청남도 공주
             Map.of(
                     "regionName", "충청남도 공주",
                     "description", "백제 문화의 숨결이 느껴지는 고즈넉한 도시",
-                    "reason", "붐비지 않고 조용하게 역사를 즐길 수 있어요.",
-                    "tags", List.of("#백제역사", "#공산성", "#가성비"),
+                    "reason", "붐비지 않고 조용하게 역사와 자연을 즐길 수 있어요.",
+                    "tags", List.of("#역사/문화", "#자연/풍경", "#힐링"),
                     "suitableBudget", List.of("10만 이하"),
                     "suitableDuration", List.of("당일치기", "1박2일"),
-                    "suitablePurpose", List.of("역사적인", "자연/풍경", "힐링"),
+                    "suitablePurpose", List.of("역사/문화", "자연/풍경", "힐링", "문화체험"),
                     "suitableCompanion", List.of("혼자", "부모님과", "친구와")
             ),
 
+            // 8. 부산
             Map.of(
                     "regionName", "부산",
-                    "description", "바다와 야경, 맛집이 모두 있는 대도시",
+                    "description", "바다와 감성, 맛집이 모두 있는 대도시",
                     "reason", "다양한 즐길거리가 있어 누구와 가도 만족스러운 여행지예요.",
-                    "tags", List.of("#해운대", "#야경", "#맛집"),  // ← 괄호 1개
+                    "tags", List.of("#맛집", "#감성/사진", "#액티비티"),
                     "suitableBudget", List.of("10~20만", "20만 이상"),
                     "suitableDuration", List.of("1박2일", "2박3일"),
-                    "suitablePurpose", List.of("맛집", "야경", "액티비티", "유명관광지", "쇼핑"),
+                    "suitablePurpose", List.of("맛집", "감성/사진", "액티비티", "카페투어", "문화체험"),
                     "suitableCompanion", List.of("친구와", "애인과", "아이와", "부모님과")
             )
     );
