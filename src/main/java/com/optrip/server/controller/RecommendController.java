@@ -3,6 +3,7 @@ package com.optrip.server.controller;
 import com.optrip.server.dto.RecommendRequest;
 import com.optrip.server.dto.RecommendResponse;
 import com.optrip.server.service.RecommendService;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,5 +26,13 @@ public class RecommendController {
 
         RecommendResponse response = recommendService.recommend(request);
         return ResponseEntity.ok(response); // 200 + 반환 데이터
+    }
+
+    @PostMapping("/recommend-ai")
+    @Operation(summary = "AI 여행지 추천",
+            description = "Gemini AI 기반으로 여행지를 추천합니다")
+    public ResponseEntity<RecommendResponse> recommendWithAI(
+            @RequestBody RecommendRequest request) {
+        return ResponseEntity.ok(recommendService.recommendWithAI(request));
     }
 }

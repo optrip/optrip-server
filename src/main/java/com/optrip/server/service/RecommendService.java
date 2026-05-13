@@ -1,5 +1,6 @@
 package com.optrip.server.service;
 
+import com.optrip.server.client.gemini.GeminiClient;
 import com.optrip.server.dto.RecommendRequest;
 import com.optrip.server.dto.RecommendResponse;
 import org.springframework.stereotype.Service;
@@ -9,6 +10,12 @@ import java.util.Map;
 
 @Service  // 이 클래스가 비즈니스 로직 담당: Spring에 알려주는 표시
 public class RecommendService {
+
+    private final GeminiClient geminiClient;
+
+    public RecommendService(GeminiClient geminiClient) {
+        this.geminiClient = geminiClient;
+    }
 
     // 지역 데이터 구조
     private static final List<Map<String, Object>> REGIONS = List.of(
@@ -109,6 +116,64 @@ public class RecommendService {
                     "suitableCompanion", List.of("친구와", "애인과", "아이와", "부모님과")
             )
     );
+
+
+    public RecommendResponse recommendWithAI(RecommendRequest request) {
+        String durationInfo;
+        if (request.getStartDate() != null && request.getEndDate() != null) {
+            durationInfo = request.getStartDate() + " ~ " + request.getEndDate();
+        } else {
+            durationInfo = request.getDuration();
+        }
+
+        // Gemini한테 보낼 프롬프트
+        String prompt = String.format("""
+                당신은 한국 여행지 추천 전문가입니다.
+                아래 조건에 맞는 한국 여행지 1곳을 추천해주세요.
+                
+                예산: %s
+                기간: %s
+                동행: %s
+                추구하는 여행 스타일: %s
+                
+                [중요 규칙]
+                - 너무 뻔한 곳보다 개성 있는 곳을 추천해주세요.
+                - description은 반드시 20자 이내 한 줄로만 작성하세요.
+                - reason은 반드시 2문장 이내로 작성하세요.
+                - tags는 아래 목록에서만 최대 3개 선택하세요:
+                  #힐링 #맛집 #감성/사진 #자연/풍경 #역사/문화
+                  #액티비티 #문화체험 #카페투어 
+                """,
+                request.getBudget(),
+                durationInfo,
+                request.getCompanion(),
+                request.getPurpose()
+        );
+
+        // Gemini 응답 형식 정의
+        // 이 형식으로만 답하라고 강제하는 것
+        Map<String, Object> responseSchema = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "regionName", Map.of("type", "STRING"),
+                        "description", Map.of("type", "STRING"),
+                        "reason", Map.of("type", "STRING"),
+                        "tags", Map.of(
+                                "type", "ARRAY",
+                                "items", Map.of("type", "STRING")
+                        )
+                ),
+                "required", List.of("regionName", "description", "reason", "tags")
+        );
+
+        // GeminiClient 호출
+        // RecommendResponse 형식으로 바로 받아옴
+        return geminiClient.generateStructured(
+                prompt,
+                responseSchema,
+                RecommendResponse.class
+        );
+    }
 
     public RecommendResponse recommend(RecommendRequest request) {
 
