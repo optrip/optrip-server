@@ -12,9 +12,12 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")       // /api/ 로 시작하는 모든 경로에 적용
-                .allowedOrigins("*")         // 개발 중엔 모든 주소 허용
+                .allowedOrigins(
+                        "https://optrip.github.io", // 배포(GitHub Pages)
+                        "http://localhost:8081",    // expo start --web 기본 포트
+                        "http://localhost:19006"    // expo 웹(구버전) 포트
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE")
                 .allowedHeaders("*");
-        // 배포 직전에 "*" → "https://optrip.github.io" 로 변경할 예정
     }
 }
