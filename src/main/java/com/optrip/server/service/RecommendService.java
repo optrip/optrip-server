@@ -1,15 +1,31 @@
 package com.optrip.server.service;
 
 import com.optrip.server.client.gemini.GeminiClient;
+import com.optrip.server.dto.CourseRecommendation.CourseList;
 import com.optrip.server.dto.RecommendRequest;
-import com.optrip.server.dto.RecommendResponse;
+import com.optrip.server.dto.RegionResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
-@Service  // 이 클래스가 비즈니스 로직 담당: Spring에 알려주는 표시
+@Service  // 비즈니스 로직 담당
 public class RecommendService {
+
+    // 여행 기간 상한: 최대 7박 8일
+    private static final int MAX_NIGHTS = 7;
+
+    // 이동수단 허용 값
+    private static final List<String> ALLOWED_TRANSPORT = List.of("자동차", "대중교통");
+
+    // 추구하는 여행(purpose) 선택 개수 제한
+    private static final int MIN_PURPOSE = 1;
+    private static final int MAX_PURPOSE = 3;
 
     private final GeminiClient geminiClient;
 
@@ -17,141 +33,48 @@ public class RecommendService {
         this.geminiClient = geminiClient;
     }
 
-    // 지역 데이터 구조
-    private static final List<Map<String, Object>> REGIONS = List.of(
+    // ──────────────────────────────────────────────
+    // 1) 지역 추천 (Image #1)
+    // ──────────────────────────────────────────────
+    public RegionResponse recommendRegion(RecommendRequest request) {
+        validate(request);
 
-            // 1. 강원도 강릉
-            Map.of(
-                    "regionName", "강원도 강릉",
-                    "description", "푸른 바다와 커피향이 어우러진 여유로운 도시",
-                    "reason", "바다를 보며 힐링하고 감성 카페에서 여유를 즐길 수 있어요.",
-                    "tags", List.of("#오션뷰", "#카페투어", "#힐링"),
-                    "suitableBudget", List.of("10~20만"),
-                    "suitableDuration", List.of("당일치기", "1박2일"),
-                    "suitablePurpose", List.of("힐링", "카페투어", "자연/풍경", "감성/사진"),
-                    "suitableCompanion", List.of("친구와", "애인과", "혼자")
-            ),
+        Trip trip = resolveTrip(request);
 
-            // 2. 전라북도 전주
-            Map.of(
-                    "regionName", "전라북도 전주",
-                    "description", "한옥마을과 전통 먹거리가 살아있는 도시",
-                    "reason", "전통문화와 맛집을 동시에 즐길 수 있는 가성비 여행지예요.",
-                    "tags", List.of("#한옥마을", "#맛집", "#역사/문화"),
-                    "suitableBudget", List.of("10만 이하", "10~20만"),
-                    "suitableDuration", List.of("당일치기", "1박2일"),
-                    "suitablePurpose", List.of("맛집", "역사/문화", "문화체험", "감성/사진"),
-                    "suitableCompanion", List.of("친구와", "애인과", "혼자", "부모님과")
-            ),
+        String excludeText = (request.getExcludeRegions() == null || request.getExcludeRegions().isEmpty())
+                ? "(없음)"
+                : String.join(", ", request.getExcludeRegions());
 
-            // 3. 제주도
-            Map.of(
-                    "regionName", "제주도",
-                    "description", "자연과 힐링이 가득한 한국의 섬",
-                    "reason", "웅장한 자연 속에서 힐링과 액티비티를 모두 즐길 수 있어요.",
-                    "tags", List.of("#자연/풍경", "#힐링", "#액티비티"),
-                    "suitableBudget", List.of("20만 이상"),
-                    "suitableDuration", List.of("2박3일", "3박4일", "4박5일"),
-                    "suitablePurpose", List.of("힐링", "액티비티", "자연/풍경", "감성/사진"),
-                    "suitableCompanion", List.of("애인과", "친구와", "부모님과", "아이와")
-            ),
-
-            // 4. 경상북도 경주
-            Map.of(
-                    "regionName", "경상북도 경주",
-                    "description", "천년 역사가 살아숨쉬는 고도",
-                    "reason", "한국 역사와 문화를 가장 깊이 느낄 수 있는 도시예요.",
-                    "tags", List.of("#역사/문화", "#문화체험", "#감성/사진"),
-                    "suitableBudget", List.of("10만 이하", "10~20만"),
-                    "suitableDuration", List.of("당일치기", "1박2일", "2박3일"),
-                    "suitablePurpose", List.of("역사/문화", "문화체험", "감성/사진", "자연/풍경"),
-                    "suitableCompanion", List.of("부모님과", "친구와", "애인과", "혼자")
-            ),
-
-            // 5. 전라남도 목포
-            Map.of(
-                    "regionName", "전라남도 목포",
-                    "description", "남도의 맛과 항구 낭만이 가득한 도시",
-                    "reason", "신선한 해산물과 남도 맛집을 저렴하게 즐길 수 있어요.",
-                    "tags", List.of("#맛집", "#역사/문화", "#감성/사진"),
-                    "suitableBudget", List.of("10만 이하", "10~20만"),
-                    "suitableDuration", List.of("당일치기", "1박2일"),
-                    "suitablePurpose", List.of("맛집", "역사/문화", "자연/풍경", "문화체험"),
-                    "suitableCompanion", List.of("부모님과", "친구와", "혼자", "아이와")
-            ),
-
-            // 6. 강원도 속초
-            Map.of(
-                    "regionName", "강원도 속초",
-                    "description", "설악산과 동해바다가 공존하는 액티비티 도시",
-                    "reason", "바다와 산을 동시에 즐길 수 있는 자연 액티비티 천국이에요.",
-                    "tags", List.of("#액티비티", "#자연/풍경", "#오션뷰"),
-                    "suitableBudget", List.of("10~20만", "20만 이상"),
-                    "suitableDuration", List.of("1박2일", "2박3일"),
-                    "suitablePurpose", List.of("액티비티", "자연/풍경", "힐링", "감성/사진"),
-                    "suitableCompanion", List.of("친구와", "애인과", "부모님과", "혼자")
-            ),
-
-            // 7. 충청남도 공주
-            Map.of(
-                    "regionName", "충청남도 공주",
-                    "description", "백제 문화의 숨결이 느껴지는 고즈넉한 도시",
-                    "reason", "붐비지 않고 조용하게 역사와 자연을 즐길 수 있어요.",
-                    "tags", List.of("#역사/문화", "#자연/풍경", "#힐링"),
-                    "suitableBudget", List.of("10만 이하"),
-                    "suitableDuration", List.of("당일치기", "1박2일"),
-                    "suitablePurpose", List.of("역사/문화", "자연/풍경", "힐링", "문화체험"),
-                    "suitableCompanion", List.of("혼자", "부모님과", "친구와")
-            ),
-
-            // 8. 부산
-            Map.of(
-                    "regionName", "부산",
-                    "description", "바다와 감성, 맛집이 모두 있는 대도시",
-                    "reason", "다양한 즐길거리가 있어 누구와 가도 만족스러운 여행지예요.",
-                    "tags", List.of("#맛집", "#감성/사진", "#액티비티"),
-                    "suitableBudget", List.of("10~20만", "20만 이상"),
-                    "suitableDuration", List.of("1박2일", "2박3일"),
-                    "suitablePurpose", List.of("맛집", "감성/사진", "액티비티", "카페투어", "문화체험"),
-                    "suitableCompanion", List.of("친구와", "애인과", "아이와", "부모님과")
-            )
-    );
-
-
-    public RecommendResponse recommendWithAI(RecommendRequest request) {
-        String durationInfo;
-        if (request.getStartDate() != null && request.getEndDate() != null) {
-            durationInfo = request.getStartDate() + " ~ " + request.getEndDate();
-        } else {
-            durationInfo = request.getDuration();
-        }
-
-        // Gemini한테 보낼 프롬프트
         String prompt = String.format("""
                 당신은 한국 여행지 추천 전문가입니다.
-                아래 조건에 맞는 한국 여행지 1곳을 추천해주세요.
-                
+                아래 조건에 맞는 한국 여행지(시/군 단위) 1곳을 추천해주세요.
+
                 예산: %s
                 기간: %s
                 동행: %s
+                이동수단: %s
                 추구하는 여행 스타일: %s
-                
+
+                [이미 추천해서 제외할 지역]
+                %s
+
                 [중요 규칙]
-                - 너무 뻔한 곳보다 개성 있는 곳을 추천해주세요.
-                - description은 반드시 20자 이내 한 줄로만 작성하세요.
-                - reason은 반드시 2문장 이내로 작성하세요.
-                - tags는 아래 목록에서만 최대 3개 선택하세요:
-                  #힐링 #맛집 #감성/사진 #자연/풍경 #역사/문화
-                  #액티비티 #문화체험 #카페투어 
+                - 위 제외 목록에 있는 지역은 절대 추천하지 마세요.
+                - 너무 뻔한 곳보다 조건에 잘 맞는 개성 있는 곳을 추천해주세요.
+                - regionName 은 "경주", "강릉" 처럼 도시/지역 이름만 간결하게 작성하세요.
+                - description 은 반드시 25자 이내 한 줄로 작성하세요.
+                - reason 은 반드시 2문장 이내로 작성하세요.
+                - tags 는 아래 목록에서만 최대 3개 선택하세요:
+                  #힐링 #맛집 #감성/사진 #자연/풍경 #역사/문화 #액티비티 #문화체험 #카페투어
                 """,
-                request.getBudget(),
-                durationInfo,
-                request.getCompanion(),
-                request.getPurpose()
+                nullSafe(request.getBudget()),
+                trip.label(),
+                nullSafe(request.getCompanion()),
+                request.getTransport(),
+                request.getPurpose(),
+                excludeText
         );
 
-        // Gemini 응답 형식 정의
-        // 이 형식으로만 답하라고 강제하는 것
         Map<String, Object> responseSchema = Map.of(
                 "type", "OBJECT",
                 "properties", Map.of(
@@ -166,96 +89,179 @@ public class RecommendService {
                 "required", List.of("regionName", "description", "reason", "tags")
         );
 
-        // GeminiClient 호출
-        // RecommendResponse 형식으로 바로 받아옴
-        return geminiClient.generateStructured(
-                prompt,
-                responseSchema,
-                RecommendResponse.class
+        return geminiClient.generateStructured(prompt, responseSchema, RegionResponse.class);
+    }
+
+    // ──────────────────────────────────────────────
+    // 2) 코스 추천 (Image #2, #3)
+    //    선택한 지역에 대해 purpose 별 코스 + 일자별 방문지/이동수단을 한 번에 생성
+    // ──────────────────────────────────────────────
+    public CourseList recommendCourses(RecommendRequest request) {
+        validate(request);
+
+        if (request.getRegionName() == null || request.getRegionName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "regionName 은 필수입니다.");
+        }
+
+        Trip trip = resolveTrip(request);
+
+        String transportRule = "대중교통".equals(request.getTransport())
+                ? "이동수단은 대중교통 기준입니다. mode 는 \"지하철\", \"버스\", \"도보\", \"택시\" 중에서 사용하고, 환승이 있으면 note 에 \"N회 환승\"을 적으세요."
+                : "이동수단은 자동차 기준입니다. mode 는 \"자동차\" 또는 짧은 거리의 \"도보\"를 사용하세요. note 는 보통 빈 문자열입니다.";
+
+        String prompt = String.format("""
+                당신은 한국 여행 코스 설계 전문가입니다.
+                "%s" 지역에 대해, 아래 조건에 맞는 여행 코스를 설계해주세요.
+
+                예산: %s
+                기간: %s (총 %d일)
+                동행: %s
+                이동수단: %s
+
+                [코스 구성 규칙]
+                - 사용자가 고른 여행 스타일(purpose) 각각에 대해 코스를 1개씩 만드세요.
+                  대상 purpose: %s
+                - 즉, courses 배열의 길이는 정확히 %d 이어야 하고, 각 course 의 purpose 는 위 목록과 일치해야 합니다.
+                - 각 코스는 정확히 %d일(day 1 ~ day %d) 일정으로 구성하세요.
+                - 하루(day)에는 2~4개의 방문지를 배치하세요.
+                - title 은 "%s %s 여행 경로" 형식으로 작성하세요. (%s 자리에 purpose)
+                - summary 는 주요 방문지를 "A · B · C 등" 형식으로 요약하세요.
+                - 각 방문지(visit)에는 실제 존재하는 장소의 정확한 위도(latitude)/경도(longitude)를 넣으세요.
+                - description 은 방문지를 한 줄(40자 내외)로 소개하세요.
+
+                [이동수단 규칙]
+                - %s
+                - 각 방문지의 transportToNext 는 "그 방문지 -> 같은 날 다음 방문지"로 가는 이동 정보입니다.
+                - 각 day 의 마지막 방문지는 transportToNext 를 넣지 마세요(생략).
+                - durationMinutes 는 예상 소요 시간(분)입니다.
+                """,
+                request.getRegionName(),
+                nullSafe(request.getBudget()),
+                trip.label(), trip.days(),
+                nullSafe(request.getCompanion()),
+                request.getTransport(),
+                request.getPurpose(),
+                request.getPurpose().size(),
+                trip.days(), trip.days(),
+                request.getRegionName(), "{purpose}", "{purpose}",
+                transportRule
+        );
+
+        return geminiClient.generateStructured(prompt, courseSchema(), CourseList.class);
+    }
+
+    // 코스 추천 응답 스키마 (중첩 구조)
+    private static Map<String, Object> courseSchema() {
+        Map<String, Object> transport = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "mode", Map.of("type", "STRING"),
+                        "durationMinutes", Map.of("type", "INTEGER"),
+                        "note", Map.of("type", "STRING")
+                ),
+                "required", List.of("mode", "durationMinutes", "note")
+        );
+
+        Map<String, Object> visit = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "order", Map.of("type", "INTEGER"),
+                        "name", Map.of("type", "STRING"),
+                        "description", Map.of("type", "STRING"),
+                        "latitude", Map.of("type", "NUMBER"),
+                        "longitude", Map.of("type", "NUMBER"),
+                        "transportToNext", transport
+                ),
+                // transportToNext 는 마지막 방문지에서 생략될 수 있어 required 에서 제외
+                "required", List.of("order", "name", "description", "latitude", "longitude")
+        );
+
+        Map<String, Object> dayPlan = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "day", Map.of("type", "INTEGER"),
+                        "visits", Map.of("type", "ARRAY", "items", visit)
+                ),
+                "required", List.of("day", "visits")
+        );
+
+        Map<String, Object> course = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "purpose", Map.of("type", "STRING"),
+                        "title", Map.of("type", "STRING"),
+                        "summary", Map.of("type", "STRING"),
+                        "days", Map.of("type", "ARRAY", "items", dayPlan)
+                ),
+                "required", List.of("purpose", "title", "summary", "days")
+        );
+
+        return Map.of(
+                "type", "OBJECT",
+                "properties", Map.of(
+                        "regionName", Map.of("type", "STRING"),
+                        "courses", Map.of("type", "ARRAY", "items", course)
+                ),
+                "required", List.of("regionName", "courses")
         );
     }
 
-    public RecommendResponse recommend(RecommendRequest request) {
+    // ──────────────────────────────────────────────
+    // 공통 검증 / 기간 계산
+    // ──────────────────────────────────────────────
+    private static void validate(RecommendRequest request) {
+        List<String> purpose = request.getPurpose();
+        if (purpose == null || purpose.size() < MIN_PURPOSE || purpose.size() > MAX_PURPOSE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "purpose 는 최소 " + MIN_PURPOSE + "개, 최대 " + MAX_PURPOSE + "개여야 합니다.");
+        }
+        if (request.getTransport() == null || !ALLOWED_TRANSPORT.contains(request.getTransport())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "transport 는 필수이며 " + ALLOWED_TRANSPORT + " 중 하나여야 합니다.");
+        }
+    }
 
-        String durationInfo;
-        if (request.getStartDate() != null && request.getEndDate() != null) {
-            // 날짜 차이 계산
-            java.time.LocalDate start = java.time.LocalDate.parse(request.getStartDate());
-            java.time.LocalDate end = java.time.LocalDate.parse(request.getEndDate());
-            long days = java.time.temporal.ChronoUnit.DAYS.between(start, end);
+    // 박/일 수 계산. 최대 7박 8일로 고정(상한 clamp).
+    private record Trip(int nights, int days, String label) {}
 
-            // 날짜 차이를 duration 형식으로 변환
-            if (days == 0) {
-                durationInfo = "당일치기";
-            } else if (days == 1) {
-                durationInfo = "1박2일";
-            } else if (days == 2) {
-                durationInfo = "2박3일";
-            } else if (days == 3) {
-                durationInfo = "3박4일";
-            } else if (days == 4) {
-                durationInfo = "4박5일";
-            } else {
-                durationInfo = "5박6일";
+    private static Trip resolveTrip(RecommendRequest request) {
+        int nights;
+        if (notBlank(request.getStartDate()) && notBlank(request.getEndDate())) {
+            try {
+                LocalDate start = LocalDate.parse(request.getStartDate());
+                LocalDate end = LocalDate.parse(request.getEndDate());
+                long between = ChronoUnit.DAYS.between(start, end);
+                nights = (int) Math.max(0, between);
+            } catch (DateTimeParseException e) {
+                nights = nightsFromDurationLabel(request.getDuration());
             }
         } else {
-            durationInfo = request.getDuration();
+            nights = nightsFromDurationLabel(request.getDuration());
         }
 
-        Map<String, Object> best = null;
-        int bestScore = -1;
+        nights = Math.min(nights, MAX_NIGHTS);  // 7박 상한
+        int days = nights + 1;
+        String label = nights == 0 ? "당일치기" : nights + "박" + days + "일";
+        return new Trip(nights, days, label);
+    }
 
-        for (Map<String, Object> region : REGIONS) {
-
-            int score = 0;
-
-            // 1순위: 예산 (40점) - 안 맞으면 바로 탈락
-            List<String> suitableBudget =
-                    (List<String>) region.get("suitableBudget");
-            if (!suitableBudget.contains(request.getBudget())) {
-                continue;  // 예산 안 맞으면 이 지역 건너뜀
-            }
-            score += 40;
-
-            // 2순위: 기간 (30점)
-            List<String> suitableDuration =
-                    (List<String>) region.get("suitableDuration");
-            if (suitableDuration.contains(durationInfo)) {
-                score += 30;
-            }
-
-            // 3순위: 목적 (10점) - purpose가 겹칠 때마다 10점
-            List<String> suitablePurpose =
-                    (List<String>) region.get("suitablePurpose");
-            for (String p : request.getPurpose()) {
-                if (suitablePurpose.contains(p)) {
-                    score += 10;
-                }
-            }
-
-            // 4순위: 동행 (10점)
-            List<String> suitableCompanion =
-                    (List<String>) region.get("suitableCompanion");
-            if (suitableCompanion.contains(request.getCompanion())) {
-                score += 10;
-            }
-
-            if (score > bestScore) {
-                bestScore = score;
-                best = region;
+    // "1박2일", "당일치기" 같은 문자열에서 박 수 추출. 알 수 없으면 2박 기본.
+    private static int nightsFromDurationLabel(String duration) {
+        if (duration == null || duration.isBlank()) return 2;
+        if (duration.contains("당일")) return 0;
+        for (int i = 0; i < duration.length(); i++) {
+            if (duration.charAt(i) == '박' && i > 0 && Character.isDigit(duration.charAt(i - 1))) {
+                return duration.charAt(i - 1) - '0';
             }
         }
+        return 2;
+    }
 
-        // 매칭 결과 없으면 첫 번째 지역 기본값으로 반환
-        if (best == null) {
-            best = REGIONS.get(0);
-        }
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
+    }
 
-        return new RecommendResponse(
-                (String) best.get("regionName"),
-                (String) best.get("description"),
-                (String) best.get("reason"),
-                (List<String>) best.get("tags")
-        );
+    private static String nullSafe(String s) {
+        return (s == null || s.isBlank()) ? "(미정)" : s;
     }
 }
