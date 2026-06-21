@@ -16,10 +16,10 @@ public final class CourseRecommendation {
             List<Course> courses
     ) {}
 
-    // purpose 1개당 코스 1개
+    // 카테고리 1개당 코스 1개 (서버가 추구미를 묶어 상위 N개 카테고리만 생성)
     public record Course(
-            String purpose,        // "역사/문화"
-            String title,          // "경주 역사/문화 여행 경로"
+            String purpose,        // 카테고리 라벨, 예: "문화·학습"
+            String title,          // "경주 문화·학습 여행 경로"
             String summary,        // "동궁과 월지 · 대릉원 · 경주 월드 · 첨성대 등"
             List<DayPlan> days
     ) {}
