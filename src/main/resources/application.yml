@@ -1,6 +1,12 @@
 spring:
   application:
     name: server
+  datasource:
+    hikari:
+      # optrip-db 는 1GB 단일 머신이라 커넥션을 아낀다
+      maximum-pool-size: 5
+  flyway:
+    enabled: true
 
 server:
   port: 8080
@@ -10,6 +16,13 @@ gemini:
   api-key: ${GEMINI_API_KEY}
   base-url: https://generativelanguage.googleapis.com
   model: gemini-3.5-flash
+
+tour:
+  service-key: ${TOUR_API_KEY:}
+  base-url: https://apis.data.go.kr/B551011
+  admin-token: ${ADMIN_TOKEN:}
+  # 호출 간 대기(ms). 일 한도 보호 + 게이트웨이 부하 방지
+  call-pause-ms: 150
 
 springdoc:
   api-docs:
