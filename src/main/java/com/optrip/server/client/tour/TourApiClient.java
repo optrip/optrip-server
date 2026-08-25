@@ -27,7 +27,11 @@ public class TourApiClient {
 
     public TourApiClient(TourApiProperties properties) {
         this.properties = properties;
-        this.restClient = RestClient.builder().build();
+        // data.go.kr 는 해외 IP 를 차단해 응답 없이 행에 걸릴 수 있다 → 타임아웃 필수
+        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10_000);
+        factory.setReadTimeout(30_000);
+        this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
     // 호출 결과. 게이트웨이 오류 시 XML 이 내려올 수 있어 resultCode/raw 를 함께 보존한다.

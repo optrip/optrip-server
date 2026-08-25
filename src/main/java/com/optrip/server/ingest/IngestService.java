@@ -193,11 +193,10 @@ public class IngestService {
                     if (!result.ok()) {
                         throw new IllegalStateException("areaBasedList2 실패: " + result.resultCode() + " " + result.resultMsg());
                     }
-                    for (JsonNode item : result.items()) {
-                        upsertRaw(item.path("contentid").asText(), "areaBasedList2", item);
-                        upsertPlace(item);
-                        c.items++;
-                    }
+                    // 페이지(최대 100건) 단위 배치 upsert — 원격 DB 왕복을 페이지당 2회로 줄인다
+                    batchUpsertRaw("areaBasedList2", result.items());
+                    batchUpsertPlaces(result.items());
+                    c.items += result.items().size();
                     if (pageNo * PAGE_SIZE >= result.totalCount() || result.items().isEmpty()) {
                         break;
                     }
@@ -207,17 +206,25 @@ public class IngestService {
         });
     }
 
-    private void upsertRaw(String contentId, String endpoint, JsonNode payload) {
-        jdbc.update("""
+    private void batchUpsertRaw(String endpoint, List<JsonNode> items) {
+        if (items.isEmpty()) {
+            return;
+        }
+        jdbc.batchUpdate("""
                         insert into tour_raw_content (content_id, endpoint, payload, modified_time)
                         values (?, ?, ?::jsonb, ?)
                         on conflict (content_id, endpoint) do update set payload = excluded.payload, modified_time = excluded.modified_time, fetched_at = now()
                         """,
-                contentId, endpoint, payload.toString(), payload.path("modifiedtime").asText(null));
+                items.stream().map(item -> new Object[]{
+                        item.path("contentid").asText(), endpoint, item.toString(), item.path("modifiedtime").asText(null)
+                }).toList());
     }
 
-    private void upsertPlace(JsonNode item) {
-        jdbc.update("""
+    private void batchUpsertPlaces(List<JsonNode> items) {
+        if (items.isEmpty()) {
+            return;
+        }
+        jdbc.batchUpdate("""
                         insert into place (content_id, content_type_id, title, addr1, addr2, zipcode,
                                            area_code, sigungu_code, cat1, cat2, cat3, lcls1, lcls2, lcls3,
                                            mapx, mapy, mlevel, first_image, first_image2, tel, created_time, modified_time)
@@ -233,14 +240,25 @@ public class IngestService {
                             tel = excluded.tel, created_time = excluded.created_time,
                             modified_time = excluded.modified_time, last_synced_at = now()
                         """,
-                item.path("contentid").asText(), item.path("contenttypeid").asText(), item.path("title").asText(),
-                text(item, "addr1"), text(item, "addr2"), text(item, "zipcode"),
-                text(item, "areacode"), text(item, "sigungucode"),
-                text(item, "cat1"), text(item, "cat2"), text(item, "cat3"),
-                text(item, "lclsSystm1"), text(item, "lclsSystm2"), text(item, "lclsSystm3"),
-                doubleOrNull(item, "mapx"), doubleOrNull(item, "mapy"), text(item, "mlevel"),
-                text(item, "firstimage"), text(item, "firstimage2"), text(item, "tel"),
-                text(item, "createdtime"), text(item, "modifiedtime"));
+                items.stream().map(item -> new Object[]{
+                        item.path("contentid").asText(), item.path("contenttypeid").asText(), item.path("title").asText(),
+                        text(item, "addr1"), text(item, "addr2"), text(item, "zipcode"),
+                        text(item, "areacode"), text(item, "sigungucode"),
+                        text(item, "cat1"), text(item, "cat2"), text(item, "cat3"),
+                        text(item, "lclsSystm1"), text(item, "lclsSystm2"), text(item, "lclsSystm3"),
+                        doubleOrNull(item, "mapx"), doubleOrNull(item, "mapy"), text(item, "mlevel"),
+                        text(item, "firstimage"), text(item, "firstimage2"), text(item, "tel"),
+                        text(item, "createdtime"), text(item, "modifiedtime")
+                }).toList());
+    }
+
+    private void upsertRaw(String contentId, String endpoint, JsonNode payload) {
+        jdbc.update("""
+                        insert into tour_raw_content (content_id, endpoint, payload, modified_time)
+                        values (?, ?, ?::jsonb, ?)
+                        on conflict (content_id, endpoint) do update set payload = excluded.payload, modified_time = excluded.modified_time, fetched_at = now()
+                        """,
+                contentId, endpoint, payload.toString(), payload.path("modifiedtime").asText(null));
     }
 
     // ──────────────────────────────────────────────
