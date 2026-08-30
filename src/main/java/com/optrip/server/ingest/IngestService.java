@@ -27,6 +27,9 @@ public class IngestService {
 
     // areaBasedList2 페이지 크기
     private static final int PAGE_SIZE = 100;
+    // 저사양 DB 보호: 배치 쪼개기 크기와 페이지 쓰기 후 대기
+    private static final int WRITE_CHUNK = 25;
+    private static final long PAGE_WRITE_PAUSE_MS = 2_000;
     // 한 번의 실행에서 허용하는 최대 API 호출 수 (일 1,000건 한도 보호)
     private static final int MAX_CALLS_PER_RUN = 900;
 
@@ -51,9 +54,25 @@ public class IngestService {
     // ──────────────────────────────────────────────
 
     private long startRun(String kind, Map<String, String> params) {
-        return jdbc.queryForObject(
-                "insert into ingest_run (kind, params) values (?, ?::jsonb) returning id",
-                Long.class, kind, toJson(params));
+        // 저사양 DB 의 순간 끊김으로 첫 INSERT 가 실패할 수 있어 짧게 재시도한다
+        RuntimeException last = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return jdbc.queryForObject(
+                        "insert into ingest_run (kind, params) values (?, ?::jsonb) returning id",
+                        Long.class, kind, toJson(params));
+            } catch (RuntimeException e) {
+                last = e;
+                log.warn("ingest_run 생성 실패, 5초 후 재시도 ({}/3): {}", attempt + 1, e.getMessage());
+                try {
+                    Thread.sleep(5_000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+            }
+        }
+        throw last;
     }
 
     private void finishRun(long runId, String status, int apiCalls, int items, String error) {
@@ -93,8 +112,13 @@ public class IngestService {
         }
         TourApiResult result = client.call(service, operation, params);
         c.calls++;
-        jdbc.update("insert into api_call_log (run_id, service, operation, params, http_status, result_code, duration_ms) values (?, ?, ?, ?::jsonb, ?, ?, ?)",
-                runId, service, operation, toJson(params), result.httpStatus(), result.resultCode(), (int) result.durationMs());
+        try {
+            jdbc.update("insert into api_call_log (run_id, service, operation, params, http_status, result_code, duration_ms) values (?, ?, ?, ?::jsonb, ?, ?, ?)",
+                    runId, service, operation, toJson(params), result.httpStatus(), result.resultCode(), (int) result.durationMs());
+        } catch (Exception e) {
+            // 호출 로그 실패로 수집 자체를 중단하지 않는다 (저사양 DB 순간 끊김 대비)
+            log.warn("api_call_log 기록 실패 (무시): {}", e.getMessage());
+        }
         if (!result.ok()) {
             log.warn("tourapi {}/{} failed: code={} msg={}", service, operation, result.resultCode(), result.resultMsg());
         }
@@ -171,10 +195,13 @@ public class IngestService {
     // 2) 지역 목록: areaBasedList2 → tour_raw_content + place
     // ──────────────────────────────────────────────
 
-    public long ingestAreaList(String areaCode, String sigunguCode, List<String> contentTypeIds) {
+    // lDongRegnCd(법정동 시도)가 주어지면 그 기준으로, 아니면 구 areaCode 기준으로 조회한다.
+    // TourAPI 4.0 신규 콘텐츠는 lDong 코드로만 걸리는 경우가 많다.
+    public long ingestAreaList(String areaCode, String sigunguCode, String lDongRegnCd, List<String> contentTypeIds) {
         Map<String, String> runParams = new LinkedHashMap<>();
-        runParams.put("areaCode", areaCode);
+        runParams.put("areaCode", areaCode == null ? "" : areaCode);
         runParams.put("sigunguCode", sigunguCode == null ? "" : sigunguCode);
+        runParams.put("lDongRegnCd", lDongRegnCd == null ? "" : lDongRegnCd);
         runParams.put("contentTypeIds", String.join(",", contentTypeIds));
 
         return submit("area-list", runParams, (runId, c) -> {
@@ -182,8 +209,12 @@ public class IngestService {
                 int pageNo = 1;
                 while (true) {
                     Map<String, String> params = new LinkedHashMap<>();
-                    params.put("areaCode", areaCode);
-                    params.put("sigunguCode", sigunguCode);
+                    if (lDongRegnCd != null && !lDongRegnCd.isBlank()) {
+                        params.put("lDongRegnCd", lDongRegnCd);
+                    } else {
+                        params.put("areaCode", areaCode);
+                        params.put("sigunguCode", sigunguCode);
+                    }
                     params.put("contentTypeId", contentTypeId);
                     params.put("numOfRows", String.valueOf(PAGE_SIZE));
                     params.put("pageNo", String.valueOf(pageNo));
@@ -193,10 +224,14 @@ public class IngestService {
                     if (!result.ok()) {
                         throw new IllegalStateException("areaBasedList2 실패: " + result.resultCode() + " " + result.resultMsg());
                     }
-                    // 페이지(최대 100건) 단위 배치 upsert — 원격 DB 왕복을 페이지당 2회로 줄인다
-                    batchUpsertRaw("areaBasedList2", result.items());
-                    batchUpsertPlaces(result.items());
+                    // 저사양 DB 보호: 25행 단위로 쪼개 쓰고, DB 순간 끊김은 재시도, 페이지마다 잠시 대기
+                    for (int from = 0; from < result.items().size(); from += WRITE_CHUNK) {
+                        List<JsonNode> chunk = result.items().subList(from, Math.min(from + WRITE_CHUNK, result.items().size()));
+                        withDbRetry(() -> batchUpsertRaw("areaBasedList2", chunk));
+                        withDbRetry(() -> batchUpsertPlaces(chunk));
+                    }
                     c.items += result.items().size();
+                    Thread.sleep(PAGE_WRITE_PAUSE_MS);
                     if (pageNo * PAGE_SIZE >= result.totalCount() || result.items().isEmpty()) {
                         break;
                     }
@@ -204,6 +239,28 @@ public class IngestService {
                 }
             }
         });
+    }
+
+    // 저사양 DB 의 순간 끊김(broken pipe 등)에서 살아남기 위한 재시도. 10초 → 30초 → 60초 대기 후 포기.
+    private void withDbRetry(Runnable write) {
+        long[] backoffMs = {10_000, 30_000, 60_000};
+        for (int attempt = 0; ; attempt++) {
+            try {
+                write.run();
+                return;
+            } catch (Exception e) {
+                if (attempt >= backoffMs.length) {
+                    throw e;
+                }
+                log.warn("DB 쓰기 실패, {}초 후 재시도 ({}/{}): {}", backoffMs[attempt] / 1000, attempt + 1, backoffMs.length, e.getMessage());
+                try {
+                    Thread.sleep(backoffMs[attempt]);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+            }
+        }
     }
 
     private void batchUpsertRaw(String endpoint, List<JsonNode> items) {
@@ -226,13 +283,15 @@ public class IngestService {
         }
         jdbc.batchUpdate("""
                         insert into place (content_id, content_type_id, title, addr1, addr2, zipcode,
-                                           area_code, sigungu_code, cat1, cat2, cat3, lcls1, lcls2, lcls3,
+                                           area_code, sigungu_code, l_dong_regn_cd, l_dong_signgu_cd,
+                                           cat1, cat2, cat3, lcls1, lcls2, lcls3,
                                            mapx, mapy, mlevel, first_image, first_image2, tel, created_time, modified_time)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         on conflict (content_id) do update set
                             content_type_id = excluded.content_type_id, title = excluded.title,
                             addr1 = excluded.addr1, addr2 = excluded.addr2, zipcode = excluded.zipcode,
                             area_code = excluded.area_code, sigungu_code = excluded.sigungu_code,
+                            l_dong_regn_cd = excluded.l_dong_regn_cd, l_dong_signgu_cd = excluded.l_dong_signgu_cd,
                             cat1 = excluded.cat1, cat2 = excluded.cat2, cat3 = excluded.cat3,
                             lcls1 = excluded.lcls1, lcls2 = excluded.lcls2, lcls3 = excluded.lcls3,
                             mapx = excluded.mapx, mapy = excluded.mapy, mlevel = excluded.mlevel,
@@ -244,6 +303,7 @@ public class IngestService {
                         item.path("contentid").asText(), item.path("contenttypeid").asText(), item.path("title").asText(),
                         text(item, "addr1"), text(item, "addr2"), text(item, "zipcode"),
                         text(item, "areacode"), text(item, "sigungucode"),
+                        text(item, "lDongRegnCd"), text(item, "lDongSignguCd"),
                         text(item, "cat1"), text(item, "cat2"), text(item, "cat3"),
                         text(item, "lclsSystm1"), text(item, "lclsSystm2"), text(item, "lclsSystm3"),
                         doubleOrNull(item, "mapx"), doubleOrNull(item, "mapy"), text(item, "mlevel"),
