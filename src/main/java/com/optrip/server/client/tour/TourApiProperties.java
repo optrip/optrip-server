@@ -8,6 +8,7 @@ public record TourApiProperties(
         String serviceKey,      // 공공데이터포털 일반 인증키 (TOUR_API_KEY 환경변수)
         String baseUrl,         // https://apis.data.go.kr/B551011
         String adminToken,      // /admin/ingest/* 보호용 토큰 (ADMIN_TOKEN 환경변수)
-        long callPauseMs        // 호출 간 대기 (일 한도 보호)
+        long callPauseMs,       // 호출 간 대기 (일 한도 보호)
+        String localProxy       // data.go.kr 해외 IP 차단 우회용 로컬 프록시 host:port (gost 사이드카)
 ) {
 }

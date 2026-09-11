@@ -23,6 +23,7 @@ tour:
   admin-token: ${ADMIN_TOKEN:}
   # 호출 간 대기(ms). 일 한도 보호 + 게이트웨이 부하 방지
   call-pause-ms: 150
+  local-proxy: ${TOUR_LOCAL_PROXY:}
 
 google:
   routes:

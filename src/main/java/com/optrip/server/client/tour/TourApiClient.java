@@ -31,6 +31,11 @@ public class TourApiClient {
         var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(10_000);
         factory.setReadTimeout(30_000);
+        if (properties.localProxy() != null && !properties.localProxy().isBlank()) {
+            String[] hostPort = properties.localProxy().split(":", 2);
+            factory.setProxy(new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                    new java.net.InetSocketAddress(hostPort[0], Integer.parseInt(hostPort[1]))));
+        }
         this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 

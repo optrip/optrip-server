@@ -113,7 +113,7 @@ public class RegionRecommendService {
             reasons.add(source.equals("user") ? "직접 선택한 목적지" : "취향과 맞는 지역");
         }
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("name", name == null ? regn + "-" + signgu : shortName(name));
+        m.put("name", name == null ? regn + "-" + signgu : name);
         m.put("lDongRegnCd", regn);
         m.put("lDongSignguCd", signgu);
         m.put("source", source);
@@ -154,12 +154,6 @@ public class RegionRecommendService {
                         """.formatted(inClause),
                 String.class, params.toArray());
         return rows.isEmpty() ? null : rows.get(0);
-    }
-
-    private static String shortName(String name) {
-        return name.replace("특별자치도", "").replace("특별자치시", "")
-                .replaceAll("^(서울특별시|부산광역시|대구광역시|인천광역시|대전광역시|울산광역시|경기도|강원|충청북도|충청남도|전라남도|경상북도|경상남도|제주|전북) ?", "")
-                .trim();
     }
 
     static double haversineKm(double lat1, double lon1, double lat2, double lon2) {

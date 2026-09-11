@@ -6,6 +6,9 @@
 app = 'optrip-server'
 primary_region = 'nrt'
 
+[env]
+  TOUR_LOCAL_PROXY = "127.0.0.1:18080"
+
 [build]
 
 [http_service]

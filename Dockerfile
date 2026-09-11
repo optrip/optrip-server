@@ -15,10 +15,18 @@ RUN ./gradlew clean bootJar -x test --no-daemon \
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
 
+ARG GOST_VERSION=3.3.0
+RUN wget -qO- https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/gost_${GOST_VERSION}_linux_amd64.tar.gz \
+    | tar -xz -C /usr/local/bin gost \
+    && chmod +x /usr/local/bin/gost
+
 RUN addgroup -S spring && adduser -S spring -G spring
-USER spring:spring
 
 COPY --from=builder /workspace/app.jar ./app.jar
+COPY start.sh ./start.sh
+RUN chmod +x start.sh
+
+USER spring:spring
 
 EXPOSE 8080
 
@@ -31,4 +39,4 @@ ENV JAVA_TOOL_OPTIONS="\
 -Xss512k \
 -Djava.security.egd=file:/dev/./urandom"
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["./start.sh"]
