@@ -12,10 +12,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Component
 @EnableConfigurationProperties(GoogleRoutesProperties.class)
 public class GoogleRoutesClient {
+
+    private static final Pattern LEADING_BUS_NUMBER = Pattern.compile("^\\s*(\\d+(?:-\\d+)?[A-Za-z]?)");
 
     private static final String FIELD_MASK = String.join(",",
             "routes.duration",
@@ -109,12 +112,25 @@ public class GoogleRoutesClient {
                     continue;
                 }
                 JsonNode line = details.path("transitLine");
-                String lineName = line.path("nameShort").asText(line.path("name").asText(""));
                 String vehicleType = line.path("vehicle").path("type").asText("TRANSIT");
+                String lineName = compactLineName(line, vehicleType);
                 int stopCount = details.path("stopCount").asInt(0);
                 steps.add(new RouteLegResponse.TransitStep(vehicleType, lineName, stopCount));
             }
         }
         return List.copyOf(steps);
+    }
+
+    private String compactLineName(JsonNode line, String vehicleType) {
+        String shortName = line.path("nameShort").asText("").trim();
+        if (!shortName.isBlank()) {
+            return shortName;
+        }
+        if (!vehicleType.contains("BUS")) {
+            return "";
+        }
+
+        var matcher = LEADING_BUS_NUMBER.matcher(line.path("name").asText(""));
+        return matcher.find() ? matcher.group(1) : "";
     }
 }
