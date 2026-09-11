@@ -91,6 +91,9 @@ public class ItineraryService {
         }
         String vehicle = steps.get(0).vehicleType().contains("SUBWAY") ? "지하철" : "버스";
         String line = steps.get(0).lineName();
+        if (line != null && line.contains("(")) {
+            line = line.substring(0, line.indexOf('('));
+        }
         String head = vehicle + (line == null || line.isBlank() ? "" : " " + line);
         int transfers = steps.size() - 1;
         String transfer = transfers > 0 ? " · %d회 환승".formatted(transfers) : "";
