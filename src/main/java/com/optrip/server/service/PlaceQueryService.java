@@ -11,7 +11,7 @@ import java.util.Map;
 @Service
 public class PlaceQueryService {
 
-    private static final String MAPPING_VERSION = "v0-draft";
+    private static final String MAPPING_VERSION = "v1";
 
     private final JdbcTemplate jdbc;
 

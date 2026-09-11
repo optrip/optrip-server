@@ -66,6 +66,18 @@ public class IngestController {
         return Map.of("runId", ingestService.ingestAccessibility(areaCode, limit));
     }
 
+    @Operation(summary = "법정동 시도/시군구 코드·이름 수집")
+    @PostMapping("/ldong-codes")
+    public Map<String, Object> ldongCodes() {
+        return Map.of("runId", ingestService.ingestLdongCodes());
+    }
+
+    @Operation(summary = "매핑 버전으로 place_intent 파생 생성")
+    @PostMapping("/derive")
+    public Map<String, Object> derive(@RequestParam(defaultValue = "v1") String mappingVersion) {
+        return ingestService.deriveIntents(mappingVersion);
+    }
+
     @Operation(summary = "수집 실행 조회")
     @GetMapping("/runs/{runId}")
     public Map<String, Object> run(@PathVariable long runId) {

@@ -191,6 +191,51 @@ public class IngestService {
                 parentCode, item.path("code").asText(), item.path("name").asText(), item.path("rnum").asInt());
     }
 
+    public long ingestLdongCodes() {
+        return submit("ldong-codes", Map.of(), (runId, c) -> {
+            TourApiResult regions = callLogged(runId, c, TourApiClient.KOR_SERVICE, "ldongCode2",
+                    Map.of("numOfRows", "50"));
+            for (JsonNode region : regions.items()) {
+                upsertLdong("", region);
+                c.items++;
+            }
+            for (JsonNode region : regions.items()) {
+                String regnCd = region.path("code").asText();
+                TourApiResult signgus = callLogged(runId, c, TourApiClient.KOR_SERVICE, "ldongCode2",
+                        Map.of("lDongRegnCd", regnCd, "numOfRows", "200"));
+                for (JsonNode signgu : signgus.items()) {
+                    upsertLdong(regnCd, signgu);
+                    c.items++;
+                }
+            }
+        });
+    }
+
+    private void upsertLdong(String parentCode, JsonNode item) {
+        jdbc.update("""
+                        insert into ldong_code (parent_code, code, name)
+                        values (?, ?, ?)
+                        on conflict (parent_code, code) do update set name = excluded.name, fetched_at = now()
+                        """,
+                parentCode, item.path("code").asText(), item.path("name").asText());
+    }
+
+    public Map<String, Object> deriveIntents(String mappingVersion) {
+        int inserted = jdbc.update("""
+                        insert into place_intent (content_id, purpose_label, mapping_version)
+                        select distinct p.content_id, m.purpose_label, m.mapping_version
+                        from place p
+                        join taxonomy_mapping m on m.mapping_version = ? and m.status = 'MAPPED'
+                         and ((m.source_scheme in ('lcls', 'lcls2') and m.source_code = p.lcls2)
+                           or (m.source_scheme = 'lcls3' and m.source_code = p.lcls3))
+                        on conflict do nothing
+                        """, mappingVersion);
+        List<Map<String, Object>> counts = jdbc.queryForList(
+                "select purpose_label, count(*) from place_intent where mapping_version = ? group by 1 order by 2 desc",
+                mappingVersion);
+        return Map.of("mappingVersion", mappingVersion, "inserted", inserted, "counts", counts);
+    }
+
     // ──────────────────────────────────────────────
     // 2) 지역 목록: areaBasedList2 → tour_raw_content + place
     // ──────────────────────────────────────────────
