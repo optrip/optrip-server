@@ -21,9 +21,11 @@ public class RegionRecommendService {
     private static final int MIN_PER_PURPOSE = 3;
 
     private final JdbcTemplate jdbc;
+    private final com.optrip.server.client.google.GoogleRoutesClient routesClient;
 
-    public RegionRecommendService(JdbcTemplate jdbc) {
+    public RegionRecommendService(JdbcTemplate jdbc, com.optrip.server.client.google.GoogleRoutesClient routesClient) {
         this.jdbc = jdbc;
+        this.routesClient = routesClient;
     }
 
     public Map<String, Object> recommend(RegionRequest request) {
@@ -72,7 +74,7 @@ public class RegionRecommendService {
                 if (!userKeys.add(key)) continue;
                 RegionAgg agg = byRegion.get(key);
                 results.add(toResponse((String) region.get("parent_code"), (String) region.get("code"),
-                        (String) region.get("name"), "user", agg, purposes));
+                        (String) region.get("name"), "user", agg, purposes, request));
             }
         }
 
@@ -81,7 +83,7 @@ public class RegionRecommendService {
                 .filter(a -> !userKeys.contains(a.key()) && !exclude.contains(a.key()))
                 .sorted(Comparator.comparingDouble((RegionAgg a) -> -score(a, purposes, request)))
                 .limit(Math.max(0, limit - results.size()))
-                .forEach(a -> results.add(toResponse(a.regn, a.signgu, regionName(a.regn, a.signgu), "ai", a, purposes)));
+                .forEach(a -> results.add(toResponse(a.regn, a.signgu, regionName(a.regn, a.signgu), "ai", a, purposes, request)));
 
         return Map.of("regions", results);
     }
@@ -100,7 +102,7 @@ public class RegionRecommendService {
     }
 
     private Map<String, Object> toResponse(String regn, String signgu, String name, String source,
-                                           RegionAgg agg, List<String> purposes) {
+                                           RegionAgg agg, List<String> purposes, RegionRequest request) {
         List<String> reasons = new ArrayList<>();
         if (agg != null) {
             agg.purposeCounts.entrySet().stream()
@@ -112,14 +114,85 @@ public class RegionRecommendService {
         if (reasons.isEmpty()) {
             reasons.add(source.equals("user") ? "직접 선택한 목적지" : "취향과 맞는 지역");
         }
+
+        long matched = agg == null ? 0 : purposes.stream()
+                .filter(p -> agg.purposeCounts.getOrDefault(p, 0L) >= MIN_PER_PURPOSE)
+                .count();
+        Map<String, Object> travel = travelFromOrigin(request, agg);
+
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("name", name == null ? regn + "-" + signgu : name);
         m.put("lDongRegnCd", regn);
         m.put("lDongSignguCd", signgu);
         m.put("source", source);
         m.put("reasons", reasons);
+        m.put("reasonsDetail", reasonsDetail(agg, purposes, travel, source));
+        m.put("matchedPurposes", matched);
+        m.put("totalPurposes", purposes.size());
+        m.put("candidateCount", candidateCount(regn, signgu, purposes));
+        m.put("travelFromOrigin", travel);
         m.put("imageUrl", regionImage(regn, signgu, purposes));
         return m;
+    }
+
+    private List<Map<String, Object>> reasonsDetail(RegionAgg agg, List<String> purposes,
+                                                    Map<String, Object> travel, String source) {
+        List<Map<String, Object>> details = new ArrayList<>();
+        if (agg != null) {
+            String counts = purposes.stream()
+                    .filter(p -> agg.purposeCounts.getOrDefault(p, 0L) > 0)
+                    .map(p -> "%s %d곳".formatted(p, agg.purposeCounts.get(p)))
+                    .reduce((a, b) -> a + ", " + b).orElse("");
+            if (!counts.isBlank()) {
+                details.add(Map.of("title", "취향을 고르게 담을 수 있어요", "description", counts + " 후보가 있어요"));
+            }
+        }
+        if (travel != null) {
+            details.add(Map.of("title", "이동 부담을 함께 봤어요", "description", "출발지에서 " + travel.get("summary")));
+        }
+        if (source.equals("user")) {
+            details.add(Map.of("title", "직접 고른 목적지예요", "description", "입력하신 지역을 추천에 그대로 반영했어요"));
+        }
+        details.add(Map.of("title", "선택 후에도 직접 고를 수 있어요", "description", "지역을 정한 뒤 장소는 사용자가 다시 선택해요"));
+        return details;
+    }
+
+    private Map<String, Object> travelFromOrigin(RegionRequest request, RegionAgg agg) {
+        if (request.originMapx() == null || request.originMapy() == null || agg == null) {
+            return null;
+        }
+        int minutes;
+        try {
+            var route = routesClient.computeLeg(new com.optrip.server.dto.RouteLegRequest(
+                    request.originMapy(), request.originMapx(), agg.cy, agg.cx, "TRANSIT"));
+            minutes = Math.max(1, (int) Math.round(route.durationSeconds() / 60.0));
+        } catch (Exception e) {
+            double km = haversineKm(request.originMapy(), request.originMapx(), agg.cy, agg.cx);
+            minutes = Math.max(10, (int) Math.round(km / 70.0 * 60) + 30);
+        }
+        String duration = minutes >= 60 ? "%dh %02dm".formatted(minutes / 60, minutes % 60) : minutes + "m";
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("mode", "대중교통");
+        m.put("durationMinutes", minutes);
+        m.put("summary", "대중교통 " + duration);
+        return m;
+    }
+
+    private long candidateCount(String regn, String signgu, List<String> purposes) {
+        String inClause = String.join(",", purposes.stream().map(p -> "?").toList());
+        List<Object> params = new ArrayList<>();
+        params.add(regn);
+        params.add(signgu);
+        params.addAll(purposes);
+        params.add(Purposes.MAPPING_VERSION);
+        Long count = jdbc.queryForObject("""
+                        select count(distinct p.content_id) from place p
+                        join place_intent i on i.content_id = p.content_id
+                        where p.l_dong_regn_cd = ? and p.l_dong_signgu_cd = ?
+                          and i.purpose_label in (%s) and i.mapping_version = ?
+                        """.formatted(inClause),
+                Long.class, params.toArray());
+        return count == null ? 0 : count;
     }
 
     private Map<String, Object> resolveRegionByName(String name) {

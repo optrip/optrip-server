@@ -14,7 +14,7 @@ import java.util.Set;
 public class PlaceRecommendService {
 
     public record PlaceRequest(String lDongRegnCd, String lDongSignguCd, List<String> purposes,
-                               Integer coreCount, Integer suggestionCount) {
+                               Integer coreCount, Integer suggestionCount, Integer suggestionsPerPurpose) {
     }
 
     private static final List<String> TYPE_PRIORITY = List.of("12", "14", "28", "39", "38");
@@ -39,7 +39,23 @@ public class PlaceRecommendService {
 
         Set<String> used = new LinkedHashSet<>();
         List<Map<String, Object>> core = pickRoundRobin(byPurpose, purposes, used, coreCount, true);
-        List<Map<String, Object>> suggestions = pickRoundRobin(byPurpose, purposes, used, suggestionCount, false);
+
+        List<Map<String, Object>> suggestions;
+        if (request.suggestionsPerPurpose() != null) {
+            int perPurpose = Math.clamp(request.suggestionsPerPurpose(), 1, 10);
+            suggestions = new ArrayList<>();
+            for (String purpose : purposes) {
+                byPurpose.getOrDefault(purpose, List.of()).stream()
+                        .filter(c -> !used.contains(c.contentId))
+                        .limit(perPurpose)
+                        .forEach(c -> {
+                            used.add(c.contentId);
+                            suggestions.add(c.toResponse(purpose, false));
+                        });
+            }
+        } else {
+            suggestions = pickRoundRobin(byPurpose, purposes, used, suggestionCount, false);
+        }
 
         return Map.of("core", core, "suggestions", suggestions);
     }

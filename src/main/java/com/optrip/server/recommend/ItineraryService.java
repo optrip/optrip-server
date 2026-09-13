@@ -18,7 +18,7 @@ import java.util.Map;
 @Service
 public class ItineraryService {
 
-    public record ItineraryRequest(List<String> placeIds, String transport, Integer days) {
+    public record ItineraryRequest(List<String> placeIds, String transport, Integer days, Boolean optimizeOrder) {
     }
 
     private static final Logger log = LoggerFactory.getLogger(ItineraryService.class);
@@ -39,7 +39,10 @@ public class ItineraryService {
         String transport = "자동차".equals(request.transport()) ? "자동차" : "대중교통";
         int days = request.days() == null ? 1 : Math.clamp(request.days(), 1, 4);
 
-        List<Stop> stops = orderByNearestNeighbor(resolve(request.placeIds()));
+        List<Stop> stops = resolve(request.placeIds());
+        if (Boolean.TRUE.equals(request.optimizeOrder())) {
+            stops = orderByNearestNeighbor(stops);
+        }
         int perDay = (int) Math.ceil((double) stops.size() / days);
 
         List<Map<String, Object>> dayList = new ArrayList<>();
