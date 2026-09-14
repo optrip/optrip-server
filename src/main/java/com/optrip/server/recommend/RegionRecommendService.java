@@ -15,7 +15,10 @@ import java.util.Set;
 public class RegionRecommendService {
 
     public record RegionRequest(List<String> purposes, List<String> destinations, List<String> excludeRegions,
-                                Double originMapx, Double originMapy, Integer limit) {
+                                Double originMapx, Double originMapy, String originName, Integer limit) {
+    }
+
+    private record Origin(double mapx, double mapy) {
     }
 
     private static final int MIN_PER_PURPOSE = 3;
@@ -34,6 +37,8 @@ public class RegionRecommendService {
                 : request.purposes().stream().filter(Purposes.ACTIVE::contains).toList();
         int limit = request.limit() == null ? 3 : Math.clamp(request.limit(), 1, 5);
         Set<String> exclude = request.excludeRegions() == null ? Set.of() : Set.copyOf(request.excludeRegions());
+
+        Origin origin = resolveOrigin(request);
 
         String inClause = String.join(",", purposes.stream().map(p -> "?").toList());
         List<Object> params = new ArrayList<>(purposes);
@@ -74,35 +79,35 @@ public class RegionRecommendService {
                 if (!userKeys.add(key)) continue;
                 RegionAgg agg = byRegion.get(key);
                 results.add(toResponse((String) region.get("parent_code"), (String) region.get("code"),
-                        (String) region.get("name"), "user", agg, purposes, request));
+                        (String) region.get("name"), "user", agg, purposes, origin));
             }
         }
 
         byRegion.values().stream()
                 .filter(a -> purposes.stream().allMatch(p -> a.purposeCounts.getOrDefault(p, 0L) >= MIN_PER_PURPOSE))
                 .filter(a -> !userKeys.contains(a.key()) && !exclude.contains(a.key()))
-                .sorted(Comparator.comparingDouble((RegionAgg a) -> -score(a, purposes, request)))
+                .sorted(Comparator.comparingDouble((RegionAgg a) -> -score(a, purposes, origin)))
                 .limit(Math.max(0, limit - results.size()))
-                .forEach(a -> results.add(toResponse(a.regn, a.signgu, regionName(a.regn, a.signgu), "ai", a, purposes, request)));
+                .forEach(a -> results.add(toResponse(a.regn, a.signgu, regionName(a.regn, a.signgu), "ai", a, purposes, origin)));
 
         return Map.of("regions", results);
     }
 
-    private double score(RegionAgg agg, List<String> purposes, RegionRequest request) {
+    private double score(RegionAgg agg, List<String> purposes, Origin origin) {
         double harmonic = purposes.size() / purposes.stream()
                 .mapToDouble(p -> 1.0 / Math.min(agg.purposeCounts.getOrDefault(p, 0L), 200))
                 .sum();
         double cohesion = 1.0 / (1.0 + agg.spread / 0.1);
-        double origin = 1.0;
-        if (request.originMapx() != null && request.originMapy() != null) {
-            double km = haversineKm(request.originMapy(), request.originMapx(), agg.cy, agg.cx);
-            origin = 1.0 / (1.0 + km / 150.0);
+        double originFactor = 1.0;
+        if (origin != null) {
+            double km = haversineKm(origin.mapy(), origin.mapx(), agg.cy, agg.cx);
+            originFactor = 1.0 / (1.0 + km / 150.0);
         }
-        return harmonic * cohesion * origin;
+        return harmonic * cohesion * originFactor;
     }
 
     private Map<String, Object> toResponse(String regn, String signgu, String name, String source,
-                                           RegionAgg agg, List<String> purposes, RegionRequest request) {
+                                           RegionAgg agg, List<String> purposes, Origin origin) {
         List<String> reasons = new ArrayList<>();
         if (agg != null) {
             agg.purposeCounts.entrySet().stream()
@@ -118,7 +123,7 @@ public class RegionRecommendService {
         long matched = agg == null ? 0 : purposes.stream()
                 .filter(p -> agg.purposeCounts.getOrDefault(p, 0L) >= MIN_PER_PURPOSE)
                 .count();
-        Map<String, Object> travel = travelFromOrigin(request, agg);
+        Map<String, Object> travel = travelFromOrigin(origin, agg);
 
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("name", name == null ? regn + "-" + signgu : name);
@@ -157,25 +162,60 @@ public class RegionRecommendService {
         return details;
     }
 
-    private Map<String, Object> travelFromOrigin(RegionRequest request, RegionAgg agg) {
-        if (request.originMapx() == null || request.originMapy() == null || agg == null) {
+    private Map<String, Object> travelFromOrigin(Origin origin, RegionAgg agg) {
+        if (origin == null || agg == null) {
             return null;
         }
         int minutes;
         try {
             var route = routesClient.computeLeg(new com.optrip.server.dto.RouteLegRequest(
-                    request.originMapy(), request.originMapx(), agg.cy, agg.cx, "TRANSIT"));
+                    origin.mapy(), origin.mapx(), agg.cy, agg.cx, "TRANSIT"));
             minutes = Math.max(1, (int) Math.round(route.durationSeconds() / 60.0));
         } catch (Exception e) {
-            double km = haversineKm(request.originMapy(), request.originMapx(), agg.cy, agg.cx);
+            double km = haversineKm(origin.mapy(), origin.mapx(), agg.cy, agg.cx);
             minutes = Math.max(10, (int) Math.round(km / 70.0 * 60) + 30);
         }
-        String duration = minutes >= 60 ? "%dh %02dm".formatted(minutes / 60, minutes % 60) : minutes + "m";
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("mode", "대중교통");
         m.put("durationMinutes", minutes);
-        m.put("summary", "대중교통 " + duration);
+        m.put("summary", "대중교통 약 " + koreanDuration(minutes));
         return m;
+    }
+
+    private static String koreanDuration(int minutes) {
+        int rounded = Math.max(10, Math.round(minutes / 10f) * 10);
+        int h = rounded / 60;
+        int min = rounded % 60;
+        if (h == 0) return min + "분";
+        return min == 0 ? h + "시간" : "%d시간 %d분".formatted(h, min);
+    }
+
+    private Origin resolveOrigin(RegionRequest request) {
+        if (request.originMapx() != null && request.originMapy() != null) {
+            return new Origin(request.originMapx(), request.originMapy());
+        }
+        if (request.originName() == null || request.originName().isBlank()) {
+            return null;
+        }
+        List<Map<String, Object>> region = jdbc.queryForList("""
+                        select parent_code, code, name from ldong_code
+                        where parent_code <> '' and name like ?
+                        order by length(name), code limit 1
+                        """, "%" + request.originName().trim() + "%");
+        if (region.isEmpty()) {
+            return null;
+        }
+        List<Map<String, Object>> center = jdbc.queryForList("""
+                        select avg(p.mapx) cx, avg(p.mapy) cy from place p
+                        join ldong_code l on l.parent_code = p.l_dong_regn_cd and l.code = p.l_dong_signgu_cd
+                        where l.parent_code = ? and l.name like ? and p.mapx is not null
+                        """, region.get(0).get("parent_code"), region.get(0).get("name") + "%");
+        Object cx = center.isEmpty() ? null : center.get(0).get("cx");
+        Object cy = center.isEmpty() ? null : center.get(0).get("cy");
+        if (cx == null || cy == null) {
+            return null;
+        }
+        return new Origin(((Number) cx).doubleValue(), ((Number) cy).doubleValue());
     }
 
     private long candidateCount(String regn, String signgu, List<String> purposes) {
