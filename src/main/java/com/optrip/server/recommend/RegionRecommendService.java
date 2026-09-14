@@ -1,5 +1,6 @@
 package com.optrip.server.recommend;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -14,8 +15,14 @@ import java.util.Set;
 @Service
 public class RegionRecommendService {
 
-    public record RegionRequest(List<String> purposes, List<String> destinations, List<String> excludeRegions,
-                                Double originMapx, Double originMapy, String originName, Integer limit) {
+    public record RegionRequest(
+            @Schema(description = "확정된 추구미 1~3개", example = "[\"바다\", \"맛집\"]") List<String> purposes,
+            @Schema(description = "사용자가 입력한 목적지 이름 (선택, source=user로 항상 포함)") List<String> destinations,
+            @Schema(description = "재추천 시 제외할 지역 키 목록 (형식: 시도코드-시군구코드)", example = "[\"51-150\"]") List<String> excludeRegions,
+            @Schema(description = "출발지 경도 (현재 위치 사용 시)") Double originMapx,
+            @Schema(description = "출발지 위도 (현재 위치 사용 시)") Double originMapy,
+            @Schema(description = "출발지 직접 입력 지역명 (좌표가 있으면 무시)", example = "수원") String originName,
+            @Schema(description = "추천 지역 수 (기본 3, 최대 5)") Integer limit) {
     }
 
     private record Origin(double mapx, double mapy) {

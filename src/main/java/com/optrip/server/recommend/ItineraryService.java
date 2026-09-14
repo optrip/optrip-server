@@ -1,6 +1,7 @@
 package com.optrip.server.recommend;
 
 import com.optrip.server.client.google.GoogleRoutesClient;
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.optrip.server.dto.RouteLegRequest;
 import com.optrip.server.dto.RouteLegResponse;
 import org.slf4j.Logger;
@@ -18,7 +19,11 @@ import java.util.Map;
 @Service
 public class ItineraryService {
 
-    public record ItineraryRequest(List<String> placeIds, String transport, Integer days, Boolean optimizeOrder) {
+    public record ItineraryRequest(
+            @Schema(description = "담은 장소의 contentId 목록 (사용자가 배치한 순서대로)") List<String> placeIds,
+            @Schema(description = "이동수단: 대중교통 또는 자동차 (기본 대중교통)", example = "대중교통") String transport,
+            @Schema(description = "여행 일수 (기본 1, 최대 4)") Integer days,
+            @Schema(description = "true면 거리 기준 자동 정렬, 기본 false(순서 유지)") Boolean optimizeOrder) {
     }
 
     private static final Logger log = LoggerFactory.getLogger(ItineraryService.class);

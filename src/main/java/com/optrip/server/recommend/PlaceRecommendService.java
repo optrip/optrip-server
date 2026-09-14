@@ -1,5 +1,6 @@
 package com.optrip.server.recommend;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -13,8 +14,13 @@ import java.util.Set;
 @Service
 public class PlaceRecommendService {
 
-    public record PlaceRequest(String lDongRegnCd, String lDongSignguCd, List<String> purposes,
-                               Integer coreCount, Integer suggestionCount, Integer suggestionsPerPurpose) {
+    public record PlaceRequest(
+            @Schema(description = "법정동 시도 코드", example = "47") String lDongRegnCd,
+            @Schema(description = "법정동 시군구 코드", example = "130") String lDongSignguCd,
+            @Schema(description = "확정된 추구미 목록") List<String> purposes,
+            @Schema(description = "꼭 가봐야할 곳 개수 (기본 2)") Integer coreCount,
+            @Schema(description = "추가 선택지 총 개수 (기본 6, suggestionsPerPurpose 미지정 시 사용)") Integer suggestionCount,
+            @Schema(description = "취향별 추가 선택지 개수 (FOR YOU 화면용, 지정 시 우선)") Integer suggestionsPerPurpose) {
     }
 
     private static final List<String> TYPE_PRIORITY = List.of("12", "14", "28", "39", "38");

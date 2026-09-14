@@ -1,6 +1,7 @@
 package com.optrip.server.recommend;
 
 import com.optrip.server.client.gemini.GeminiClient;
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -9,13 +10,22 @@ import java.util.Map;
 @Service
 public class InterpretService {
 
-    public record InterpretRequest(String text, List<String> dates, String companion, List<String> destinations) {
+    public record InterpretRequest(
+            @Schema(description = "사용자가 입력한 자연어 문장", example = "한식 맛집 찾아다니고 예쁜 카페에서 쉬고 싶어") String text,
+            @Schema(description = "여행 날짜 목록 (선택, 해석 참고용)") List<String> dates,
+            @Schema(description = "동행자 (선택, 해석 참고용)", example = "애인과") String companion,
+            @Schema(description = "입력한 목적지 목록 (선택, 해석 참고용)") List<String> destinations) {
     }
 
-    public record PhraseMapping(String phrase, List<String> purposes) {
+    public record PhraseMapping(
+            @Schema(description = "사용자가 실제로 쓴 표현") String phrase,
+            @Schema(description = "그 표현이 해석된 추구미") List<String> purposes) {
     }
 
-    public record InterpretResult(List<String> purposes, String summary, List<PhraseMapping> mappings) {
+    public record InterpretResult(
+            @Schema(description = "해석된 추구미 1~3개. 해석 실패 시 빈 배열") List<String> purposes,
+            @Schema(description = "이해 확인 화면에 보여줄 한 문장 요약") String summary,
+            @Schema(description = "표현별 해석 근거 (최대 3개)") List<PhraseMapping> mappings) {
     }
 
     private static final Map<String, Object> SCHEMA = Map.of(
