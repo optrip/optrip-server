@@ -140,7 +140,9 @@ public class RecommendV2Controller {
             응답:
             {
               "contentId": "128526", "title": "경주 동궁과 월지", "addr1": "...",
-              "mapx": 129.22, "mapy": 35.83, "imageUrl": "...", "tel": "... 또는 null",
+              "mapx": 129.22, "mapy": 35.83, "imageUrl": "...",
+              "purposes": ["역사/문화", "자연/풍경"],           // 이 장소와 매칭된 추구미. "N 취향과 잘 맞는 장소예요" 문구용. 없으면 빈 배열
+              "tel": "... 또는 null",
               "overview": "신라 왕궁의 별궁 터... 또는 null",
               "homepage": null, "useTime": "09:00~22:00 또는 null",
               "restDate": null, "parking": null, "fee": null,

@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +52,7 @@ public class TourDetailService {
         res.put("mapx", place.get("mapx"));
         res.put("mapy", place.get("mapy"));
         res.put("imageUrl", place.get("first_image"));
+        res.put("purposes", purposes(contentId));
         res.put("tel", firstNonBlank(text(common, "tel"), (String) place.get("tel")));
         res.put("overview", text(common, "overview"));
         res.put("homepage", stripTags(text(common, "homepage")));
@@ -67,6 +69,16 @@ public class TourDetailService {
                 text(intro, "usefee"), text(intro, "usefeeleports"), text(intro, "usetimefestival")));
         res.put("accessibility", accessibilityResponse(with));
         return res;
+    }
+
+    private List<String> purposes(String contentId) {
+        List<String> labels = jdbc.queryForList(
+                "select distinct purpose_label from place_intent where content_id = ? and mapping_version = ?",
+                String.class, contentId, Purposes.MAPPING_VERSION);
+        return labels.stream()
+                .filter(Purposes.ACTIVE::contains)
+                .sorted(Comparator.comparingInt(Purposes.ACTIVE::indexOf))
+                .toList();
     }
 
     private JsonNode cachedOrFetch(String contentId, String endpoint, Map<String, String> params) {
