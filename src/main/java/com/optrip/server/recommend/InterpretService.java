@@ -4,6 +4,7 @@ import com.optrip.server.client.gemini.GeminiClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -12,9 +13,9 @@ public class InterpretService {
 
     public record InterpretRequest(
             @Schema(description = "사용자가 입력한 자연어 문장", example = "한식 맛집 찾아다니고 예쁜 카페에서 쉬고 싶어") String text,
-            @Schema(description = "여행 날짜 목록 (선택, 해석 참고용)") List<String> dates,
-            @Schema(description = "동행자 (선택, 해석 참고용)", example = "애인과") String companion,
-            @Schema(description = "입력한 목적지 목록 (선택, 해석 참고용)") List<String> destinations) {
+            @Schema(description = "여행 날짜 목록 (선택). 추구미 판단에만 참고하고 summary에는 반영하지 않음") List<String> dates,
+            @Schema(description = "동행자 (선택). 추구미 판단에만 참고하고 summary에는 반영하지 않음", example = "애인과") String companion,
+            @Schema(description = "입력한 목적지 목록 (선택). 추구미 판단에만 참고하고 summary에는 반영하지 않음") List<String> destinations) {
     }
 
     public record PhraseMapping(
@@ -68,9 +69,9 @@ public class InterpretService {
                   선택한 purposes와 어긋나는 내용을 넣지 않는다. 존댓말 없이 "~하는 여행" 형태로 끝낸다.
                 - mappings: 사용자 문장에서 실제로 쓴 표현을 짧게 인용하고, 그 표현이 어떤 추구미로 해석됐는지 연결한다.
                   purposes에 넣은 추구미만 사용한다. 표현당 하나씩, 최대 3개.
-
+                %s
                 사용자 문장: %s
-                """.formatted(String.join(", ", Purposes.ACTIVE), text);
+                """.formatted(String.join(", ", Purposes.ACTIVE), contextBlock(request), text);
 
         InterpretResult raw = geminiClient.generateStructured(prompt, SCHEMA, InterpretResult.class);
 
@@ -89,5 +90,26 @@ public class InterpretService {
                 .limit(3)
                 .toList();
         return new InterpretResult(purposes, summary, mappings);
+    }
+
+    private static String contextBlock(InterpretRequest request) {
+        List<String> lines = new ArrayList<>();
+        if (request.companion() != null && !request.companion().isBlank()) {
+            lines.add("- 동행: " + request.companion().trim());
+        }
+        if (request.dates() != null && !request.dates().isEmpty()) {
+            lines.add("- 여행 날짜: " + String.join(" ~ ", request.dates()));
+        }
+        if (request.destinations() != null && !request.destinations().isEmpty()) {
+            lines.add("- 가고 싶은 곳: " + String.join(", ", request.destinations()));
+        }
+        if (lines.isEmpty()) {
+            return "";
+        }
+        return """
+
+                참고 조건 (사용자가 앞 화면에서 고른 값이다. purposes를 고를 때만 참고하고, summary와 mappings에는 넣지 않는다):
+                %s
+                """.formatted(String.join("\n", lines));
     }
 }
