@@ -1,6 +1,7 @@
 package com.optrip.server.recommend;
 
 import com.optrip.server.client.google.GoogleRoutesClient;
+import com.optrip.server.client.kakao.KakaoDirectionsClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.optrip.server.dto.RouteLegRequest;
 import com.optrip.server.dto.RouteLegResponse;
@@ -31,10 +32,13 @@ public class ItineraryService {
 
     private final JdbcTemplate jdbc;
     private final GoogleRoutesClient routesClient;
+    private final KakaoDirectionsClient kakaoDirectionsClient;
 
-    public ItineraryService(JdbcTemplate jdbc, GoogleRoutesClient routesClient) {
+    public ItineraryService(JdbcTemplate jdbc, GoogleRoutesClient routesClient,
+                            KakaoDirectionsClient kakaoDirectionsClient) {
         this.jdbc = jdbc;
         this.routesClient = routesClient;
+        this.kakaoDirectionsClient = kakaoDirectionsClient;
     }
 
     public Map<String, Object> build(ItineraryRequest request) {
@@ -75,9 +79,12 @@ public class ItineraryService {
             int minutes = Math.max(1, (int) Math.round(km / 4.0 * 60));
             return legResponse("도보", "도보 · 약 %d분 소요".formatted(minutes), minutes, (int) (km * 1000), null);
         }
-        String travelMode = "자동차".equals(transport) ? "DRIVE" : "TRANSIT";
         try {
-            RouteLegResponse route = routesClient.computeLeg(new RouteLegRequest(from.mapy, from.mapx, to.mapy, to.mapx, travelMode));
+            RouteLegRequest request = new RouteLegRequest(from.mapy, from.mapx, to.mapy, to.mapx,
+                    "자동차".equals(transport) ? "DRIVE" : "TRANSIT");
+            RouteLegResponse route = "자동차".equals(transport)
+                    ? kakaoDirectionsClient.computeLeg(request)
+                    : routesClient.computeLeg(request);
             int minutes = Math.max(1, (int) Math.round(route.durationSeconds() / 60.0));
             return legResponse(transport, transitSummary(transport, route, minutes), minutes,
                     route.distanceMeters(), route.encodedPolyline());
