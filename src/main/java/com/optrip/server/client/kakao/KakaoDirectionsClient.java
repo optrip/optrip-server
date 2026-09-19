@@ -58,6 +58,7 @@ public class KakaoDirectionsClient {
                 summary.path("duration").asLong(0),
                 summary.path("distance").asInt(0),
                 encodePolyline(readPoints(route.path("sections"))),
+                List.of(),
                 List.of()
         );
     }

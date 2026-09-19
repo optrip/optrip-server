@@ -77,7 +77,8 @@ public class ItineraryService {
         double km = RegionRecommendService.haversineKm(from.mapy, from.mapx, to.mapy, to.mapx);
         if (km < WALK_THRESHOLD_KM) {
             int minutes = Math.max(1, (int) Math.round(km / 4.0 * 60));
-            return legResponse("도보", "도보 · 약 %d분 소요".formatted(minutes), minutes, (int) (km * 1000), null);
+            return legResponse("도보", "도보 · 약 %d분 소요".formatted(minutes), minutes,
+                    (int) (km * 1000), null, simpleStep("도보", minutes, (int) (km * 1000)));
         }
         try {
             RouteLegRequest request = new RouteLegRequest(from.mapy, from.mapx, to.mapy, to.mapx,
@@ -87,12 +88,13 @@ public class ItineraryService {
                     : routesClient.computeLeg(request);
             int minutes = Math.max(1, (int) Math.round(route.durationSeconds() / 60.0));
             return legResponse(transport, transitSummary(transport, route, minutes), minutes,
-                    route.distanceMeters(), route.encodedPolyline());
+                    route.distanceMeters(), route.encodedPolyline(), stepResponses(route));
         } catch (Exception e) {
             log.warn("경로 계산 실패, 추정치 사용: {}", e.getMessage());
             double speedKmh = "자동차".equals(transport) ? 40 : 20;
             int minutes = Math.max(5, (int) Math.round(km / speedKmh * 60) + ("자동차".equals(transport) ? 3 : 8));
-            return legResponse(transport, "%s · 약 %d분 소요".formatted(transport, minutes), minutes, (int) (km * 1000), null);
+            return legResponse(transport, "%s · 약 %d분 소요".formatted(transport, minutes), minutes,
+                    (int) (km * 1000), null, simpleStep(transport, minutes, (int) (km * 1000)));
         }
     }
 
@@ -115,16 +117,58 @@ public class ItineraryService {
         return "%s 이용%s · 약 %d분 소요".formatted(head, transfer, minutes);
     }
 
-    private static Map<String, Object> legResponse(String mode, String summary, int minutes, int meters, String polyline) {
+    private static Map<String, Object> legResponse(String mode, String summary, int minutes, int meters,
+                                                   String polyline, List<Map<String, Object>> steps) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("mode", mode);
         m.put("summary", summary);
         m.put("durationMinutes", minutes);
         m.put("distanceMeters", meters);
+        m.put("steps", steps);
         if (polyline != null && !polyline.isBlank()) {
             m.put("encodedPolyline", polyline);
         }
         return m;
+    }
+
+    private static List<Map<String, Object>> simpleStep(String mode, int minutes, int meters) {
+        return List.of(stepResponse(mode, minutes, meters, "", "", "", 0));
+    }
+
+    private static List<Map<String, Object>> stepResponses(RouteLegResponse route) {
+        if (route.steps() == null || route.steps().isEmpty()) {
+            int minutes = Math.max(1, (int) Math.round(route.durationSeconds() / 60.0));
+            String mode = "DRIVE".equals(route.travelMode()) ? "자동차" : "대중교통";
+            return simpleStep(mode, minutes, route.distanceMeters());
+        }
+        return route.steps().stream().map(step -> {
+            String mode;
+            if ("WALK".equals(step.travelMode())) {
+                mode = "도보";
+            } else if (step.vehicleType() != null && step.vehicleType().contains("SUBWAY")) {
+                mode = "지하철";
+            } else if ("TRANSIT".equals(step.travelMode())) {
+                mode = "버스";
+            } else {
+                mode = "자동차";
+            }
+            int minutes = Math.max(1, (int) Math.round(step.durationSeconds() / 60.0));
+            return stepResponse(mode, minutes, step.distanceMeters(), step.lineName(),
+                    step.departureStop(), step.arrivalStop(), step.stopCount());
+        }).toList();
+    }
+
+    private static Map<String, Object> stepResponse(String mode, int minutes, int meters, String lineName,
+                                                     String departureStop, String arrivalStop, int stopCount) {
+        Map<String, Object> step = new LinkedHashMap<>();
+        step.put("mode", mode);
+        step.put("durationMinutes", minutes);
+        step.put("distanceMeters", meters);
+        if (lineName != null && !lineName.isBlank()) step.put("lineName", lineName);
+        if (departureStop != null && !departureStop.isBlank()) step.put("departureStop", departureStop);
+        if (arrivalStop != null && !arrivalStop.isBlank()) step.put("arrivalStop", arrivalStop);
+        if (stopCount > 0) step.put("stopCount", stopCount);
+        return step;
     }
 
     private List<Stop> resolve(List<String> placeIds) {

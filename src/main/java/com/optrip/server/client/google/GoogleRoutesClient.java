@@ -25,6 +25,8 @@ public class GoogleRoutesClient {
             "routes.distanceMeters",
             "routes.polyline.encodedPolyline",
             "routes.legs.steps.travelMode",
+            "routes.legs.steps.staticDuration",
+            "routes.legs.steps.distanceMeters",
             "routes.legs.steps.transitDetails"
     );
 
@@ -70,12 +72,19 @@ public class GoogleRoutesClient {
             throw new IllegalStateException("Google에서 이용 가능한 경로를 찾지 못했습니다.");
         }
 
+        List<RouteLegResponse.RouteStep> steps = readRouteSteps(route);
+        List<RouteLegResponse.TransitStep> transitSteps = steps.stream()
+                .filter(step -> "TRANSIT".equals(step.travelMode()))
+                .map(step -> new RouteLegResponse.TransitStep(
+                        step.vehicleType(), step.lineName(), step.stopCount()))
+                .toList();
         return new RouteLegResponse(
                 travelMode,
                 parseDurationSeconds(route.path("duration").asText("0s")),
                 route.path("distanceMeters").asInt(0),
                 route.path("polyline").path("encodedPolyline").asText(""),
-                readTransitSteps(route)
+                transitSteps,
+                steps
         );
     }
 
@@ -103,19 +112,25 @@ public class GoogleRoutesClient {
         }
     }
 
-    private List<RouteLegResponse.TransitStep> readTransitSteps(JsonNode route) {
-        List<RouteLegResponse.TransitStep> steps = new ArrayList<>();
+    private List<RouteLegResponse.RouteStep> readRouteSteps(JsonNode route) {
+        List<RouteLegResponse.RouteStep> steps = new ArrayList<>();
         for (JsonNode leg : route.path("legs")) {
             for (JsonNode step : leg.path("steps")) {
+                String travelMode = step.path("travelMode").asText("");
                 JsonNode details = step.path("transitDetails");
-                if (details.isMissingNode()) {
-                    continue;
-                }
                 JsonNode line = details.path("transitLine");
                 String vehicleType = line.path("vehicle").path("type").asText("TRANSIT");
                 String lineName = compactLineName(line, vehicleType);
                 int stopCount = details.path("stopCount").asInt(0);
-                steps.add(new RouteLegResponse.TransitStep(vehicleType, lineName, stopCount));
+                steps.add(new RouteLegResponse.RouteStep(
+                        travelMode,
+                        parseDurationSeconds(step.path("staticDuration").asText("0s")),
+                        step.path("distanceMeters").asInt(0),
+                        details.isMissingNode() ? "" : vehicleType,
+                        details.isMissingNode() ? "" : lineName,
+                        details.path("stopDetails").path("departureStop").path("name").asText(""),
+                        details.path("stopDetails").path("arrivalStop").path("name").asText(""),
+                        stopCount));
             }
         }
         return List.copyOf(steps);
