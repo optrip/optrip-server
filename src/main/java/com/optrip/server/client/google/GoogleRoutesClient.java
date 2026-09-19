@@ -139,13 +139,20 @@ public class GoogleRoutesClient {
     private String compactLineName(JsonNode line, String vehicleType) {
         String shortName = line.path("nameShort").asText("").trim();
         if (!shortName.isBlank()) {
-            return shortName;
+            return compactCandidate(shortName, vehicleType);
         }
         if (!vehicleType.contains("BUS")) {
             return "";
         }
+        return compactCandidate(line.path("name").asText(""), vehicleType);
+    }
 
-        var matcher = LEADING_BUS_NUMBER.matcher(line.path("name").asText(""));
-        return matcher.find() ? matcher.group(1) : "";
+    private String compactCandidate(String candidate, String vehicleType) {
+        if (vehicleType.contains("BUS")) {
+            var matcher = LEADING_BUS_NUMBER.matcher(candidate);
+            if (matcher.find()) return matcher.group(1);
+        }
+        int parenthesis = candidate.indexOf('(');
+        return (parenthesis >= 0 ? candidate.substring(0, parenthesis) : candidate).trim();
     }
 }
